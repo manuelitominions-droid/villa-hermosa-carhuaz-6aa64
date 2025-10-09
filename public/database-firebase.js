@@ -1,562 +1,339 @@
-// database-firebase.js - Integración Firebase manteniendo la misma interfaz que localStorage
-import { db } from '../firebase-config.js';
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy,
-  setDoc,
-  getDoc
-} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+// database-firebase.js - Manejo de base de datos con Firebase
 
+// Importar Firebase desde el contexto global
+const { 
+    getFirestore, 
+    collection, 
+    doc, 
+    addDoc, 
+    updateDoc, 
+    deleteDoc, 
+    getDocs, 
+    getDoc, 
+    query, 
+    where, 
+    orderBy, 
+    limit 
+} = window.firebase;
+
+// Obtener instancia de Firestore
+const db = getFirestore();
+
+console.log('🔥 Firebase Database inicializada correctamente');
+
+// Clase Database para manejar todas las operaciones
 class Database {
     constructor() {
-        this.initializeDatabase();
-    }
-
-    async initializeDatabase() {
-        try {
-            // Verificar si existe el usuario por defecto
-            const usuariosRef = collection(db, 'villa_usuarios');
-            const usuariosSnapshot = await getDocs(usuariosRef);
-            
-            if (usuariosSnapshot.empty) {
-                // Crear usuario por defecto
-                const defaultUser = {
-                    id: 1,
-                    username: 'villahermosa',
-                    password: 'villa8956',
-                    rol: 'admin_principal'
-                };
-                await addDoc(usuariosRef, defaultUser);
-                console.log('✅ Usuario por defecto creado');
-            }
-
-            // Inicializar configuración de mora si no existe
-            const configRef = doc(db, 'villa_config', 'mora');
-            const configDoc = await getDoc(configRef);
-            
-            if (!configDoc.exists()) {
-                const defaultConfig = {
-                    porcentaje_6_14: 0.01,
-                    porcentaje_15_30: 0.015
-                };
-                await setDoc(configRef, defaultConfig);
-                console.log('✅ Configuración de mora inicializada');
-            }
-
-            console.log('🔥 Firebase Database inicializada correctamente');
-        } catch (error) {
-            console.error('❌ Error inicializando Firebase:', error);
-        }
-    }
-
-    // Usuarios
-    async getUsuarios() {
-        try {
-            const usuariosRef = collection(db, 'villa_usuarios');
-            const snapshot = await getDocs(usuariosRef);
-            return snapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
-        } catch (error) {
-            console.error('Error obteniendo usuarios:', error);
-            return [];
-        }
-    }
-
-    async saveUsuarios(usuarios) {
-        // Este método se mantiene por compatibilidad pero no se usa en Firebase
-        console.warn('saveUsuarios no implementado en Firebase - usar addUsuario');
-    }
-
-    async getUsuarioByCredentials(username, password) {
-        try {
-            const usuarios = await this.getUsuarios();
-            return usuarios.find(u => u.username === username && u.password === password);
-        } catch (error) {
-            console.error('Error verificando credenciales:', error);
-            return null;
-        }
-    }
-
-    async addUsuario(usuario) {
-        try {
-            const usuarios = await this.getUsuarios();
-            usuario.id = this.getNextId(usuarios);
-            const usuariosRef = collection(db, 'villa_usuarios');
-            const docRef = await addDoc(usuariosRef, usuario);
-            return { firebaseId: docRef.id, ...usuario };
-        } catch (error) {
-            console.error('Error agregando usuario:', error);
-            return null;
-        }
+        this.db = db;
     }
 
     // Registros
     async getRegistros() {
         try {
-            const registrosRef = collection(db, 'villa_registros');
-            const q = query(registrosRef, orderBy('fecha_registro', 'desc'));
-            const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
+            const querySnapshot = await getDocs(collection(this.db, 'villa_registros'));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
         } catch (error) {
             console.error('Error obteniendo registros:', error);
             return [];
         }
     }
 
-    async saveRegistros(registros) {
-        // Método de compatibilidad - no recomendado para Firebase
-        console.warn('saveRegistros no recomendado en Firebase');
-    }
-
-    async addRegistro(registro) {
+    async addRegistro(registroData) {
         try {
-            const registros = await this.getRegistros();
-            const newId = registros.length + 1;
-            registro.id = newId;
-            registro.fecha_registro = new Date().toISOString().split('T')[0];
-            registro.bienvenida_enviada = 0;
-            
-            const registrosRef = collection(db, 'villa_registros');
-            const docRef = await addDoc(registrosRef, registro);
-            return { firebaseId: docRef.id, ...registro };
+            registroData.fecha_registro = registroData.fecha_registro || new Date().toISOString().split('T')[0];
+            const docRef = await addDoc(collection(this.db, 'villa_registros'), registroData);
+            return { id: docRef.id, firebaseId: docRef.id, ...registroData };
         } catch (error) {
             console.error('Error agregando registro:', error);
-            return null;
+            throw error;
         }
     }
 
-    async getRegistroById(id) {
+    async updateRegistro(registroId, updateData) {
         try {
-            const registros = await this.getRegistros();
-            return registros.find(r => r.id === parseInt(id));
-        } catch (error) {
-            console.error('Error obteniendo registro por ID:', error);
-            return null;
-        }
-    }
-
-    async updateRegistro(id, updatedData) {
-        try {
-            const registros = await this.getRegistros();
-            const registro = registros.find(r => r.id === parseInt(id));
-            
-            if (registro && registro.firebaseId) {
-                const registroRef = doc(db, 'villa_registros', registro.firebaseId);
-                await updateDoc(registroRef, updatedData);
-                return { ...registro, ...updatedData };
-            }
-            return null;
+            const docRef = doc(this.db, 'villa_registros', registroId);
+            await updateDoc(docRef, updateData);
+            return true;
         } catch (error) {
             console.error('Error actualizando registro:', error);
-            return null;
+            throw error;
         }
     }
 
-    async deleteRegistro(id) {
+    async deleteRegistro(registroId) {
         try {
-            const registros = await this.getRegistros();
-            const registro = registros.find(r => r.id === parseInt(id));
+            // Eliminar registro
+            await deleteDoc(doc(this.db, 'villa_registros', registroId));
             
-            if (registro && registro.firebaseId) {
-                // Eliminar cuotas relacionadas
-                const cuotas = await this.getCuotas();
-                const cuotasToDelete = cuotas.filter(c => c.registro_id === parseInt(id));
-                
-                for (const cuota of cuotasToDelete) {
-                    if (cuota.firebaseId) {
-                        await deleteDoc(doc(db, 'villa_cuotas', cuota.firebaseId));
-                    }
-                }
-                
-                // Eliminar registro
-                await deleteDoc(doc(db, 'villa_registros', registro.firebaseId));
-                return true;
-            }
-            return false;
+            // Eliminar cuotas asociadas
+            const cuotasQuery = query(collection(this.db, 'villa_cuotas'), where('registro_id', '==', parseInt(registroId)));
+            const cuotasSnapshot = await getDocs(cuotasQuery);
+            const deletePromises = cuotasSnapshot.docs.map(cuotaDoc => deleteDoc(cuotaDoc.ref));
+            await Promise.all(deletePromises);
+            
+            return true;
         } catch (error) {
             console.error('Error eliminando registro:', error);
-            return false;
+            throw error;
+        }
+    }
+
+    async searchRegistros({ manzana, lote, query }) {
+        try {
+            const registros = await this.getRegistros();
+            let results = registros;
+
+            // Filtrar por manzana y lote si se proporcionan
+            if (manzana && lote) {
+                results = results.filter(r => 
+                    r.manzana && r.lote &&
+                    r.manzana.toString().toLowerCase() === manzana.toLowerCase() &&
+                    r.lote.toString().toLowerCase() === lote.toLowerCase()
+                );
+            }
+
+            // Filtrar por query (DNI o nombre) si se proporciona
+            if (query) {
+                const queryLower = query.toLowerCase();
+                results = results.filter(r =>
+                    (r.nombre1 && r.nombre1.toLowerCase().includes(queryLower)) ||
+                    (r.nombre2 && r.nombre2.toLowerCase().includes(queryLower)) ||
+                    (r.dni1 && r.dni1.includes(query)) ||
+                    (r.dni2 && r.dni2.includes(query))
+                );
+            }
+
+            return { results, error: null };
+        } catch (error) {
+            console.error('Error en búsqueda:', error);
+            return { results: [], error: 'Error en la búsqueda' };
         }
     }
 
     // Cuotas
     async getCuotas() {
         try {
-            const cuotasRef = collection(db, 'villa_cuotas');
-            const snapshot = await getDocs(cuotasRef);
-            return snapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
+            const querySnapshot = await getDocs(collection(this.db, 'villa_cuotas'));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
         } catch (error) {
             console.error('Error obteniendo cuotas:', error);
             return [];
         }
     }
 
-    async saveCuotas(cuotas) {
-        console.warn('saveCuotas no recomendado en Firebase');
-    }
-
-    async addCuota(cuota) {
+    async getCuotaById(cuotaId) {
         try {
-            const cuotas = await this.getCuotas();
-            cuota.id = this.getNextId(cuotas);
-            cuota.pagado = cuota.pagado || 0;
-            cuota.mora = cuota.mora || 0;
-            
-            const cuotasRef = collection(db, 'villa_cuotas');
-            const docRef = await addDoc(cuotasRef, cuota);
-            return { firebaseId: docRef.id, ...cuota };
-        } catch (error) {
-            console.error('Error agregando cuota:', error);
+            const docRef = doc(this.db, 'villa_cuotas', cuotaId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                return { id: docSnap.id, firebaseId: docSnap.id, ...docSnap.data() };
+            }
             return null;
-        }
-    }
-
-    async getCuotasByRegistroId(registroId) {
-        try {
-            const cuotas = await this.getCuotas();
-            return cuotas.filter(c => c.registro_id === parseInt(registroId))
-                        .sort((a, b) => a.numero - b.numero);
-        } catch (error) {
-            console.error('Error obteniendo cuotas por registro:', error);
-            return [];
-        }
-    }
-
-    async getCuotaById(id) {
-        try {
-            const cuotas = await this.getCuotas();
-            return cuotas.find(c => c.id === parseInt(id));
         } catch (error) {
             console.error('Error obteniendo cuota por ID:', error);
             return null;
         }
     }
 
-    async updateCuota(id, updatedData) {
+    async addCuota(cuotaData) {
         try {
-            const cuotas = await this.getCuotas();
-            const cuota = cuotas.find(c => c.id === parseInt(id));
-            
-            if (cuota && cuota.firebaseId) {
-                const cuotaRef = doc(db, 'villa_cuotas', cuota.firebaseId);
-                await updateDoc(cuotaRef, updatedData);
-                
-                // Recalcular estado del registro
-                setTimeout(() => {
-                    try { 
-                        this.recalcRegistroEstado(cuota.registro_id); 
-                    } catch(e) { 
-                        console.warn('Error recalculando estado registro', e); 
-                    }
-                }, 0);
-                
-                return { ...cuota, ...updatedData };
-            }
-            return null;
+            const docRef = await addDoc(collection(this.db, 'villa_cuotas'), cuotaData);
+            return { id: docRef.id, firebaseId: docRef.id, ...cuotaData };
+        } catch (error) {
+            console.error('Error agregando cuota:', error);
+            throw error;
+        }
+    }
+
+    async updateCuota(cuotaId, updateData) {
+        try {
+            const docRef = doc(this.db, 'villa_cuotas', cuotaId);
+            await updateDoc(docRef, updateData);
+            return true;
         } catch (error) {
             console.error('Error actualizando cuota:', error);
-            return null;
+            throw error;
+        }
+    }
+
+    async getCuotasByRegistroId(registroId) {
+        try {
+            const cuotasQuery = query(collection(this.db, 'villa_cuotas'), where('registro_id', '==', parseInt(registroId)));
+            const querySnapshot = await getDocs(cuotasQuery);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error('Error obteniendo cuotas por registro ID:', error);
+            return [];
         }
     }
 
     // Vouchers
     async getVouchers() {
         try {
-            const vouchersRef = collection(db, 'villa_vouchers');
-            const snapshot = await getDocs(vouchersRef);
-            return snapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
+            const querySnapshot = await getDocs(collection(this.db, 'villa_vouchers'));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
         } catch (error) {
             console.error('Error obteniendo vouchers:', error);
             return [];
         }
     }
 
-    async saveVouchers(vouchers) {
-        console.warn('saveVouchers no recomendado en Firebase');
-    }
-
-    async addVoucher(voucher) {
+    async addVoucher(voucherData) {
         try {
-            const vouchers = await this.getVouchers();
-            voucher.id = this.getNextId(vouchers);
-            
-            const vouchersRef = collection(db, 'villa_vouchers');
-            const docRef = await addDoc(vouchersRef, voucher);
-            return { firebaseId: docRef.id, ...voucher };
+            const docRef = await addDoc(collection(this.db, 'villa_vouchers'), voucherData);
+            return { id: docRef.id, firebaseId: docRef.id, ...voucherData };
         } catch (error) {
             console.error('Error agregando voucher:', error);
-            return null;
+            throw error;
+        }
+    }
+
+    async deleteVoucher(voucherId) {
+        try {
+            await deleteDoc(doc(this.db, 'villa_vouchers', voucherId));
+            return true;
+        } catch (error) {
+            console.error('Error eliminando voucher:', error);
+            throw error;
         }
     }
 
     async getVouchersByCuotaId(cuotaId) {
         try {
-            const vouchers = await this.getVouchers();
-            return vouchers.filter(v => v.cuota_id === parseInt(cuotaId));
+            const vouchersQuery = query(collection(this.db, 'villa_vouchers'), where('cuota_id', '==', parseInt(cuotaId)));
+            const querySnapshot = await getDocs(vouchersQuery);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
         } catch (error) {
-            console.error('Error obteniendo vouchers por cuota:', error);
+            console.error('Error obteniendo vouchers por cuota ID:', error);
             return [];
-        }
-    }
-
-    async deleteVoucher(id) {
-        try {
-            const vouchers = await this.getVouchers();
-            const voucher = vouchers.find(v => v.id === parseInt(id));
-            
-            if (voucher && voucher.firebaseId) {
-                await deleteDoc(doc(db, 'villa_vouchers', voucher.firebaseId));
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Error eliminando voucher:', error);
-            return false;
         }
     }
 
     // Boletas
     async getBoletas() {
         try {
-            const boletasRef = collection(db, 'villa_boletas');
-            const snapshot = await getDocs(boletasRef);
-            return snapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
+            const querySnapshot = await getDocs(collection(this.db, 'villa_boletas'));
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
         } catch (error) {
             console.error('Error obteniendo boletas:', error);
             return [];
         }
     }
 
-    async saveBoletas(boletas) {
-        console.warn('saveBoletas no recomendado en Firebase');
-    }
-
-    async addBoleta(boleta) {
+    async addBoleta(boletaData) {
         try {
-            const boletas = await this.getBoletas();
-            boleta.id = this.getNextId(boletas);
-            
-            const boletasRef = collection(db, 'villa_boletas');
-            const docRef = await addDoc(boletasRef, boleta);
-            return { firebaseId: docRef.id, ...boleta };
+            const docRef = await addDoc(collection(this.db, 'villa_boletas'), boletaData);
+            return { id: docRef.id, firebaseId: docRef.id, ...boletaData };
         } catch (error) {
             console.error('Error agregando boleta:', error);
-            return null;
+            throw error;
+        }
+    }
+
+    async deleteBoleta(boletaId) {
+        try {
+            await deleteDoc(doc(this.db, 'villa_boletas', boletaId));
+            return true;
+        } catch (error) {
+            console.error('Error eliminando boleta:', error);
+            throw error;
         }
     }
 
     async getBoletasByCuotaId(cuotaId) {
         try {
-            const boletas = await this.getBoletas();
-            return boletas.filter(b => b.cuota_id === parseInt(cuotaId));
+            const boletasQuery = query(collection(this.db, 'villa_boletas'), where('cuota_id', '==', parseInt(cuotaId)));
+            const querySnapshot = await getDocs(boletasQuery);
+            return querySnapshot.docs.map(doc => ({ id: doc.id, firebaseId: doc.id, ...doc.data() }));
         } catch (error) {
-            console.error('Error obteniendo boletas por cuota:', error);
+            console.error('Error obteniendo boletas por cuota ID:', error);
             return [];
         }
     }
 
-    async deleteBoleta(id) {
-        try {
-            const boletas = await this.getBoletas();
-            const boleta = boletas.find(b => b.id === parseInt(id));
-            
-            if (boleta && boleta.firebaseId) {
-                await deleteDoc(doc(db, 'villa_boletas', boleta.firebaseId));
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('Error eliminando boleta:', error);
-            return false;
-        }
-    }
-
-    // Configuración de mora
-    async getConfigMora() {
-        try {
-            const configRef = doc(db, 'villa_config', 'mora');
-            const configDoc = await getDoc(configRef);
-            
-            if (configDoc.exists()) {
-                return configDoc.data();
-            }
-            
-            return {
-                porcentaje_6_14: 0.01,
-                porcentaje_15_30: 0.015
-            };
-        } catch (error) {
-            console.error('Error obteniendo configuración de mora:', error);
-            return {
-                porcentaje_6_14: 0.01,
-                porcentaje_15_30: 0.015
-            };
-        }
-    }
-
-    async saveConfigMora(config) {
-        try {
-            const configRef = doc(db, 'villa_config', 'mora');
-            await setDoc(configRef, config);
-        } catch (error) {
-            console.error('Error guardando configuración de mora:', error);
-        }
-    }
-
-    // Métodos de utilidad que se mantienen igual
-    getNextId(array) {
-        if (!array || array.length === 0) return 1;
-        return array.length + 1;
-    }
-
-    // Métodos de cálculo que se mantienen iguales (sin async)
-    async getSaldoPendienteByRegistro(registroId) {
-        const cuotas = (await this.getCuotas()).filter(c => c.registro_id === parseInt(registroId) && c.numero > 0);
-        let pendingAmount = 0;
-        let pendingCount = 0;
-
-        cuotas.forEach(c => {
-            if (!c.pagado || parseInt(c.pagado) === 0) {
-                const mora = c.numero > 0 ? calcularMora(c.monto, c.fecha_vencimiento, c.fecha_pago) : 0;
-                pendingAmount += (c.monto || 0) + (mora || 0);
-                pendingCount += 1;
-            }
-        });
-
-        return { pendingAmount, pendingCount };
-    }
-
-    async recalcRegistroEstado(registroId) {
-        try {
-            const saldo = await this.getSaldoPendienteByRegistro(registroId);
-            const updatedData = {
-                saldo_pendiente: saldo.pendingAmount,
-                cuotas_pendientes: saldo.pendingCount,
-                estado_pago: saldo.pendingAmount > 0 ? 'deuda' : 'al_dia'
-            };
-            
-            return await this.updateRegistro(registroId, updatedData);
-        } catch (error) {
-            console.error('Error recalculando estado registro:', error);
-            return null;
-        }
-    }
-
-    // Búsquedas (se mantienen iguales pero con async)
-    async searchRegistros(criteria) {
-        const registros = await this.getRegistros();
-        let results = registros;
-
-        if (criteria.manzana && criteria.lote) {
-            const manzanaQ = criteria.manzana.trim().toUpperCase();
-            const loteQ = criteria.lote.trim().toUpperCase();
-            results = results.filter(r => 
-                (r.manzana || '').toString().trim().toUpperCase() === manzanaQ &&
-                (r.lote || '').toString().trim().toUpperCase() === loteQ
-            );
-
-            if (criteria.query) {
-                const q = criteria.query.trim().toUpperCase();
-                results = results.filter(r =>
-                    (r.nombre1 || '').toString().toUpperCase().includes(q) ||
-                    (r.nombre2 || '').toString().toUpperCase().includes(q) ||
-                    (r.dni1 || '').toString().toUpperCase().includes(q) ||
-                    (r.dni2 || '').toString().toUpperCase().includes(q)
-                );
-            }
-        } else if (criteria.query && !criteria.manzana && !criteria.lote) {
-            const q = criteria.query.trim().toUpperCase();
-            results = results.filter(r =>
-                (r.nombre1 || '').toString().toUpperCase().includes(q) ||
-                (r.nombre2 || '').toString().toUpperCase().includes(q) ||
-                (r.dni1 || '').toString().toUpperCase().includes(q) ||
-                (r.dni2 || '').toString().toUpperCase().includes(q)
-            );
-        } else {
-            return { results: [], error: "Para buscar por ubicación, debe ingresar tanto la Manzana como el Lote" };
-        }
-
-        return { results: results.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro)), error: null };
-    }
-
-    // Estadísticas (se mantienen iguales pero con async)
+    // Funciones de análisis y reportes
     async getEstadisticasMes(mesStr) {
         const cuotas = await this.getCuotas();
         const registros = await this.getRegistros();
         
-        const cuotasVencenEsteMes = cuotas.filter(c => {
+        // Cuotas que vencen este mes (número > 0)
+        const cuotasMes = cuotas.filter(c => {
             const fechaVenc = c.fecha_vencimiento;
-            return fechaVenc.substring(0, 7) === mesStr && c.numero > 0;
+            return fechaVenc && fechaVenc.substring(0, 7) === mesStr && c.numero > 0;
         });
+
+        // Cuotas pagadas que vencen este mes
+        const cuotasPagadasMes = cuotasMes.filter(c => c.pagado === 1);
         
+        // Cuotas no pagadas que vencen este mes
+        const cuotasNoPagadasMes = cuotasMes.filter(c => c.pagado === 0);
+
+        // Cuotas adelantadas: pagadas este mes pero vencen después
         const cuotasAdelantadas = cuotas.filter(c => {
             const fechaPago = c.fecha_pago;
             const fechaVenc = c.fecha_vencimiento;
-            return c.pagado === 1 && 
-                   fechaPago && fechaPago.substring(0, 7) === mesStr && 
-                   fechaVenc.substring(0, 7) !== mesStr && 
-                   c.numero > 0;
+            return fechaPago && fechaPago.substring(0, 7) === mesStr && 
+                   fechaVenc && fechaVenc.substring(0, 7) > mesStr && 
+                   c.pagado === 1 && c.numero > 0;
         });
-        
-        const cuotasPagadasDelMes = cuotasVencenEsteMes.filter(c => c.pagado === 1);
-        const cuotasPendientesDelMes = cuotasVencenEsteMes.filter(c => c.pagado === 0);
-        
-        const montoProyectado = cuotasVencenEsteMes.reduce((sum, c) => sum + c.monto, 0);
-        const montoPagadoDelMes = cuotasPagadasDelMes.reduce((sum, c) => sum + c.monto, 0);
-        const montoAdelantado = cuotasAdelantadas.reduce((sum, c) => sum + c.monto, 0);
-        const montoIngresado = montoPagadoDelMes + montoAdelantado;
-        const montoCuotasPagadas = cuotasPagadasDelMes.reduce((sum, c) => sum + c.monto, 0);
-        const montoCuotasPendientes = cuotasPendientesDelMes.reduce((sum, c) => sum + c.monto, 0);
 
-        const totalCuotas = cuotasVencenEsteMes.length;
-        const numPagadas = cuotasPagadasDelMes.length;
-        const numPendientes = cuotasPendientesDelMes.length;
+        const totalCuotas = cuotasMes.length;
+        const numPagadas = cuotasPagadasMes.length;
+        const noPagadas = cuotasNoPagadasMes.length;
         const numAdelantadas = cuotasAdelantadas.length;
 
+        const porcentajePagado = totalCuotas > 0 ? (numPagadas / totalCuotas) * 100 : 0;
+        const porcentajeNoPagado = totalCuotas > 0 ? (noPagadas / totalCuotas) * 100 : 0;
+
+        // Calcular montos
+        const montoCuotasPagadas = cuotasPagadasMes.reduce((sum, c) => sum + (c.monto || 0), 0);
+        const montoCuotasPendientes = cuotasNoPagadasMes.reduce((sum, c) => sum + (c.monto || 0), 0);
+        const montoAdelantadas = cuotasAdelantadas.reduce((sum, c) => sum + (c.monto || 0), 0);
+        
+        const totalProyectado = cuotasMes.reduce((sum, c) => sum + (c.monto || 0), 0);
+        const montoPagado = montoCuotasPagadas + montoAdelantadas;
+
         return {
-            totalCuotas: totalCuotas,
-            numPagadas: numPagadas,
-            noPagadas: numPendientes,
-            numAdelantadas: numAdelantadas,
-            totalProyectado: montoProyectado,
-            montoPagado: montoIngresado,
-            montoCuotasPagadas: montoCuotasPagadas,
-            montoCuotasPendientes: montoCuotasPendientes,
-            montoAdelantadas: montoAdelantado,
-            porcentajePagado: totalCuotas > 0 ? (numPagadas / totalCuotas * 100) : 0,
-            porcentajeNoPagado: totalCuotas > 0 ? (numPendientes / totalCuotas * 100) : 0,
-            cuotasVencenEsteMes: cuotasVencenEsteMes,
-            cuotasAdelantadas: cuotasAdelantadas,
-            cuotasPagadasDelMes: cuotasPagadasDelMes,
-            cuotasPendientesDelMes: cuotasPendientesDelMes
+            totalCuotas,
+            numPagadas,
+            noPagadas,
+            numAdelantadas,
+            porcentajePagado,
+            porcentajeNoPagado,
+            montoCuotasPagadas,
+            montoCuotasPendientes,
+            montoAdelantadas,
+            totalProyectado,
+            montoPagado
         };
     }
 
     async getProjectionForMonth(mesStr) {
         const cuotas = await this.getCuotas();
         const registros = await this.getRegistros();
-
-        const cuotasEnMes = cuotas.filter(c => c.fecha_vencimiento && c.fecha_vencimiento.substring(0,7) === mesStr && c.numero > 0);
+        
+        // Cuotas que vencen en el mes especificado (número > 0, no pagadas)
+        const cuotasDelMes = cuotas.filter(c => {
+            const fechaVenc = c.fecha_vencimiento;
+            return fechaVenc && fechaVenc.substring(0, 7) === mesStr && c.numero > 0 && c.pagado === 0;
+        });
 
         let totalProjected = 0;
         let totalProjectedWithMora = 0;
         const cuotasDetail = [];
 
-        cuotasEnMes.forEach(c => {
-            const registro = registros.find(r => r.id === c.registro_id) || null;
-            const mora = c.numero > 0 ? calcularMora(c.monto, c.fecha_vencimiento, c.fecha_pago) : 0;
-            const pending = !c.pagado || parseInt(c.pagado) === 0;
-            if (pending) {
-                totalProjected += (c.monto || 0);
-                totalProjectedWithMora += (c.monto || 0) + (mora || 0);
-            }
-            cuotasDetail.push({ cuota: c, registro, pending, mora });
+        cuotasDelMes.forEach(c => {
+            const registro = registros.find(r => r.id === c.registro_id);
+            if (!registro) return;
+
+            const monto = c.monto || 0;
+            const pending = c.pagado === 0;
+            const mora = pending ? calcularMora(monto, c.fecha_vencimiento, null) : 0;
+
+            totalProjected += monto;
+            totalProjectedWithMora += monto + mora;
+
+            cuotasDetail.push({ cuota: c, registro, monto, pending, mora });
         });
 
         const pendingCount = cuotasDetail.filter(d => d.pending).length;
@@ -799,10 +576,10 @@ class Database {
 
 // Instancia global de la base de datos
 const database = new Database();
-
-// Crear alias 'db' para compatibilidad con app.js
-window.db = database;
 window.database = database;
+
+// Exportar la instancia para que pueda ser importada por otros módulos
+export { database };
 
 // Exponer utilidades globales
 if (typeof window.cleanupOrphans === 'undefined') {
