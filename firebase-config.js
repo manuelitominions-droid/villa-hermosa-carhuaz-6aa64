@@ -4,12 +4,12 @@ import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase
 import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-// Tu configuración Firebase (¡YA CONFIGURADA!)
+// Configuración Firebase corregida
 const firebaseConfig = {
   apiKey: "AIzaSyAp6lYxU-ZTz8GL4fwAQWbkcCNODQuils8",
-  authDomain: "villa-hermosa-carhuaz-6aa64.firebaseapp.com",
-  projectId: "villa-hermosa-carhuaz-6aa64",
-  storageBucket: "villa-hermosa-carhuaz-6aa64.firebasestorage.app",
+  authDomain: "villa-hermosa-00.firebaseapp.com",
+  projectId: "villa-hermosa-00",
+  storageBucket: "villa-hermosa-00.appspot.com",
   messagingSenderId: "82074482369",
   appId: "1:82074482369:web:66a1a2cb610b4c21440640",
   measurementId: "G-N8JEN5X0WC"
