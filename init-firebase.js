@@ -1,72 +1,57 @@
 // init-firebase.js - Inicialización de Firebase
-console.log('🔥 Cargando Firebase SDK...');
+console.log('🔥 Iniciando configuración de Firebase...');
 
-// Cargar Firebase desde CDN
-(function() {
-    // Firebase v9 modular SDK
-    const firebaseScript = document.createElement('script');
-    firebaseScript.type = 'module';
-    firebaseScript.innerHTML = `
-        // Importar Firebase
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+// Importar Firebase desde CDN
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-        // Configuración de Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyBvOoWWl7pVGGnuGJWnz8bkV8yHxGLwYxs",
-            authDomain: "villa-hermosa-00.firebaseapp.com",
-            projectId: "villa-hermosa-00",
-            storageBucket: "villa-hermosa-00.appspot.com",
-            messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:abcdef123456789012345678"
-        };
+// Configuración Firebase actualizada para el proyecto correcto
+const firebaseConfig = {
+  apiKey: "AIzaSyAp6lYxU-ZTz8GL4fwAQWbkcCNODQuils8",
+  authDomain: "villa-hermosa-00.firebaseapp.com",
+  projectId: "villa-hermosa-00",
+  storageBucket: "villa-hermosa-00.appspot.com",
+  messagingSenderId: "82074482369",
+  appId: "1:82074482369:web:66a1a2cb610b4c21440640",
+  measurementId: "G-N8JEN5X0WC"
+};
 
-        // Inicializar Firebase
-        let app;
-        try {
-            app = initializeApp(firebaseConfig);
-            console.log('✅ Firebase App cargado');
-        } catch (error) {
-            console.error('❌ Error inicializando Firebase:', error);
-            throw error;
-        }
+try {
+  // Inicializar Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
 
-        // Inicializar servicios
-        const db = getFirestore(app);
-        const storage = getStorage(app);
+  console.log('✅ Firebase inicializado correctamente');
+  console.log('📊 Proyecto:', firebaseConfig.projectId);
 
-        console.log('✅ Firebase Firestore cargado');
-        console.log('✅ Firebase Storage cargado');
+  // Hacer disponible globalmente
+  window.firebase = {
+    app,
+    db,
+    auth,
+    storage,
+    // Funciones de Firestore
+    collection,
+    doc,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    getDocs,
+    getDoc,
+    query,
+    where,
+    orderBy
+  };
 
-        // Crear objeto Firebase global con todas las funciones necesarias
-        window.firebase = {
-            app: app,
-            db: db,
-            storage: storage,
-            // Funciones de Firestore
-            collection: (name) => collection(db, name),
-            doc: (collectionName, docId) => doc(db, collectionName, docId),
-            addDoc: addDoc,
-            updateDoc: updateDoc,
-            deleteDoc: deleteDoc,
-            getDocs: getDocs,
-            getDoc: getDoc,
-            query: query,
-            where: where,
-            orderBy: orderBy,
-            limit: limit,
-            // Funciones de Storage
-            ref: (path) => ref(storage, path),
-            uploadBytes: uploadBytes,
-            getDownloadURL: getDownloadURL
-        };
+  // Disparar evento para notificar que Firebase está listo
+  console.log('🔔 Disparando evento firebaseReady');
+  window.dispatchEvent(new CustomEvent('firebaseReady'));
 
-        console.log('✅ Firebase inicializado correctamente y disponible globalmente');
-        
-        // Disparar evento personalizado para indicar que Firebase está listo
-        window.dispatchEvent(new CustomEvent('firebaseReady'));
-    `;
-    
-    document.head.appendChild(firebaseScript);
-})();
+} catch (error) {
+  console.error('❌ Error inicializando Firebase:', error);
+  window.firebase = null;
+}
