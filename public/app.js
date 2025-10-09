@@ -648,7 +648,7 @@ async function loadPendientesContent() {
                     return;
                 }
 
-                const mora = calcularMora(p.monto, p.fecha_vencimiento, p.fecha_pago);
+                const mora = typeof calcularMora === 'function' ? calcularMora(p.monto, p.fecha_vencimiento, p.fecha_pago) : 0;
                 const montoTotal = (typeof p.monto === 'number' ? p.monto : parseFloat(p.monto) || 0) + (mora || 0);
                 const montoStr = mora > 0 ? `${formatCurrency(montoTotal)} (incluye mora)` : formatCurrency(p.monto || 0);
 
@@ -662,7 +662,7 @@ async function loadPendientesContent() {
                                 <p class="text-sm text-red-600">Cuota N° ${p.numero} - Vence: ${formatFecha(p.fecha_vencimiento)}</p>
                                 <p class="font-semibold text-red-800">Monto a pagar: ${montoStr}</p>
                             </div>
-                            <button onclick="showCuotasModal(${p.registro_id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                            <button onclick="showCuotasModal('${p.registro_id}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
                                 Ver Detalle
                             </button>
                         </div>
@@ -720,7 +720,7 @@ async function loadAtrasadosContent() {
                                 <p class="text-sm text-orange-600">Manzana: ${a.registro.manzana || ''} | Lote: ${a.registro.lote || ''}</p>
                                 <p class="font-semibold text-orange-800">Debe ${a.cuotasPendientes || 0} cuotas atrasadas</p>
                             </div>
-                            <button onclick="showCuotasModal(${a.registro.id})" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
+                            <button onclick="showCuotasModal('${a.registro.id}')" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
                                 Ver Detalle
                             </button>
                         </div>
@@ -982,13 +982,15 @@ async function handleNewRegistro(event) {
         const nuevoRegistro = await db.addRegistro(registroData);
         
         // Generar cuotas
-        generarCuotas(
-            nuevoRegistro.id,
-            registroData.forma_pago,
-            registroData.monto_total,
-            registroData.inicial,
-            registroData.numero_cuotas
-        );
+        if (typeof generarCuotas === 'function') {
+            generarCuotas(
+                nuevoRegistro.id,
+                registroData.forma_pago,
+                registroData.monto_total,
+                registroData.inicial,
+                registroData.numero_cuotas
+            );
+        }
         
         showNotification('Registro creado exitosamente', 'success');
         closeModal();
