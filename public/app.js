@@ -2,8 +2,8 @@ import { debounce } from './utils.js';
 
 // app.js - Lógica principal de la aplicación
 
-// Importar la instancia de base de datos
-import { database } from './database-firebase.js';
+// Importar la instancia de base de datos usando importación por defecto
+import database from './database-firebase.js';
 
 // Hacer la instancia disponible globalmente como 'db'
 window.db = database;
@@ -75,9 +75,9 @@ function showSection(sectionName) {
     const targetSection = document.getElementById(sectionName + 'Section');
     if (targetSection) {
         targetSection.classList.remove('hidden');
-    currentSection = sectionName;
-    // Mantener una referencia global para otros scripts que no son módulos
-    try { window.currentSection = currentSection; } catch (e) { /* ignore */ }
+        currentSection = sectionName;
+        // Mantener una referencia global para otros scripts que no son módulos
+        try { window.currentSection = currentSection; } catch (e) { /* ignore */ }
         
         // Cargar contenido específico de la sección
         loadSectionContent(sectionName);
@@ -104,31 +104,36 @@ function updateActiveNav(sectionName) {
 
 // Cargar contenido específico de cada sección
 async function loadSectionContent(sectionName) {
-    switch (sectionName) {
-        case 'inicio':
-            loadInicioContent();
-            break;
-        case 'clientes':
-            await loadClientesContent();
-            break;
-        case 'proyeccion':
-            await loadProyeccionContent();
-            break;
-        case 'estadisticas':
-            await loadEstadisticasContent();
-            break;
-        case 'pendientes':
-            await loadPendientesContent();
-            break;
-        case 'atrasados':
-            await loadAtrasadosContent();
-            break;
-        case 'reporte-mensual':
-            await loadReporteMensualContent();
-            break;
-        case 'crear-usuario':
-            loadCrearUsuarioContent();
-            break;
+    try {
+        switch (sectionName) {
+            case 'inicio':
+                loadInicioContent();
+                break;
+            case 'clientes':
+                await loadClientesContent();
+                break;
+            case 'proyeccion':
+                await loadProyeccionContent();
+                break;
+            case 'estadisticas':
+                await loadEstadisticasContent();
+                break;
+            case 'pendientes':
+                await loadPendientesContent();
+                break;
+            case 'atrasados':
+                await loadAtrasadosContent();
+                break;
+            case 'reporte-mensual':
+                await loadReporteMensualContent();
+                break;
+            case 'crear-usuario':
+                loadCrearUsuarioContent();
+                break;
+        }
+    } catch (error) {
+        console.error(`Error cargando sección ${sectionName}:`, error);
+        showNotification(`Error cargando la sección ${sectionName}`, 'error');
     }
 }
 
@@ -214,7 +219,7 @@ async function loadClientesContent() {
     } catch (error) {
         console.error('Error cargando clientes:', error);
         document.getElementById('clientesCount').textContent = 'Error cargando clientes';
-        document.getElementById('clientesTable').innerHTML = '<div class="text-red-500">Error al cargar los datos</div>';
+        document.getElementById('clientesTable').innerHTML = '<div class="text-red-500">Error cargando los datos de clientes</div>';
     }
 }
 
@@ -248,7 +253,7 @@ async function loadProyeccionContent() {
     try {
         // Proyección: opción de seleccionar mes y ver timeline hasta última cuota
         const nextMonth = getNextMonth();
-        const defaultEnd = await db.getLastCuotaMonth() || nextMonth;
+        const defaultEnd = (await db.getLastCuotaMonth()) || nextMonth;
 
         // Inicializar estado de vista de proyección (se usará para exportar lo visible)
         window._currentProjectionView = { mode: 'single', month: nextMonth, start: null, end: null };
@@ -280,7 +285,7 @@ async function loadProyeccionContent() {
         await showProjectionSingle();
     } catch (error) {
         console.error('Error cargando proyección:', error);
-        document.getElementById('proyeccionContent').innerHTML = '<div class="text-red-500">Error al cargar proyección</div>';
+        document.getElementById('proyeccionContent').innerHTML = '<div class="text-red-500">Error cargando proyección</div>';
     }
 }
 
@@ -310,7 +315,7 @@ async function showProjectionSingle() {
         `;
     } catch (error) {
         console.error('Error en showProjectionSingle:', error);
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error al cargar proyección</div>';
+        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error cargando proyección</div>';
     }
 }
 
@@ -318,7 +323,7 @@ async function showProjectionSingle() {
 async function showProjectionTimeline() {
     try {
         const start = getNextMonth();
-        const end = await db.getLastCuotaMonth() || start;
+        const end = (await db.getLastCuotaMonth()) || start;
         // marcar vista timeline
         window._currentProjectionView = { mode: 'timeline', month: null, start, end };
         const timeline = await db.getProjectionTimeline(start, end);
@@ -358,7 +363,7 @@ async function showProjectionTimeline() {
         `;
     } catch (error) {
         console.error('Error en showProjectionTimeline:', error);
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error al cargar timeline</div>';
+        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error cargando timeline</div>';
     }
 }
 
@@ -431,7 +436,7 @@ async function showProjectionRange(startMonth, endMonth) {
         `;
     } catch (error) {
         console.error('Error en showProjectionRange:', error);
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error al cargar rango</div>';
+        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error cargando rango</div>';
     }
 }
 
@@ -439,7 +444,7 @@ async function showProjectionRange(startMonth, endMonth) {
 async function exportProjectionTimeline() {
     try {
         const start = getNextMonth();
-        const end = await db.getLastCuotaMonth() || start;
+        const end = (await db.getLastCuotaMonth()) || start;
         if (typeof exportProjectionTimelinePDF === 'function') {
             exportProjectionTimelinePDF(start, end);
         } else {
@@ -457,6 +462,10 @@ async function loadEstadisticasContent() {
         const currentMonth = getCurrentMonth();
         const monthName = getMonthName(currentMonth);
         const stats = await db.getEstadisticasMes(currentMonth);
+        
+        // Verificar que stats tiene las propiedades necesarias
+        const porcentajePagado = stats.porcentajePagado || 0;
+        const porcentajeNoPagado = stats.porcentajeNoPagado || 0;
         
         document.getElementById('estadisticasContent').innerHTML = `
             <div class="space-y-6">
@@ -487,12 +496,12 @@ async function loadEstadisticasContent() {
                     <div class="bg-green-50 p-6 rounded-lg">
                         <h4 class="text-lg font-semibold text-green-800 mb-2">Cuotas Pagadas</h4>
                         <p class="text-3xl font-bold text-green-600">${stats.numPagadas || 0}</p>
-                        <p class="text-sm text-green-600">(${(stats.porcentajePagado || 0).toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPagadas || 0)}</p>
+                        <p class="text-sm text-green-600">(${porcentajePagado.toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPagadas || 0)}</p>
                     </div>
                     <div class="bg-red-50 p-6 rounded-lg">
                         <h4 class="text-lg font-semibold text-red-800 mb-2">Cuotas Pendientes</h4>
                         <p class="text-3xl font-bold text-red-600">${stats.noPagadas || 0}</p>
-                        <p class="text-sm text-red-600">(${(stats.porcentajeNoPagado || 0).toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPendientes || 0)}</p>
+                        <p class="text-sm text-red-600">(${porcentajeNoPagado.toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPendientes || 0)}</p>
                     </div>
                 </div>
                 
@@ -505,7 +514,7 @@ async function loadEstadisticasContent() {
                     <div class="bg-purple-50 p-6 rounded-lg">
                         <h4 class="text-lg font-semibold text-purple-800 mb-2">Monto Ingresado</h4>
                         <p class="text-2xl font-bold text-purple-600">${formatCurrency(stats.montoPagado || 0)}</p>
-                        <p class="text-sm text-purple-600">(${(stats.totalProyectado || 0) > 0 ? ((stats.montoPagado || 0) / (stats.totalProyectado || 1) * 100).toFixed(1) : 0}% del proyectado)</p>
+                        <p class="text-sm text-purple-600">(${stats.totalProyectado > 0 ? (stats.montoPagado / stats.totalProyectado * 100).toFixed(1) : 0}% del proyectado)</p>
                         <p class="text-xs text-purple-600 mt-1">Incluye cuotas del mes + adelantadas</p>
                     </div>
                 </div>
@@ -524,7 +533,7 @@ async function loadEstadisticasContent() {
         `;
     } catch (error) {
         console.error('Error cargando estadísticas:', error);
-        document.getElementById('estadisticasContent').innerHTML = '<div class="text-red-500">Error al cargar estadísticas</div>';
+        document.getElementById('estadisticasContent').innerHTML = '<div class="text-red-500">Error cargando estadísticas</div>';
     }
 }
 
@@ -589,7 +598,7 @@ async function loadPendientesContent() {
         `;
     } catch (error) {
         console.error('Error cargando pendientes:', error);
-        document.getElementById('pendientesContent').innerHTML = '<div class="text-red-500">Error al cargar pendientes</div>';
+        document.getElementById('pendientesContent').innerHTML = '<div class="text-red-500">Error cargando pendientes</div>';
     }
 }
 
@@ -604,23 +613,23 @@ async function loadAtrasadosContent() {
         } else {
             atrasadosHTML = '<ul class="space-y-4">';
             atrasados.forEach(a => {
-                if (a && a.registro) {
-                    atrasadosHTML += `
-                        <li class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h4 class="font-semibold text-orange-800">${a.registro.nombre1 || ''}</h4>
-                                    <p class="text-sm text-orange-600">DNI: ${a.registro.dni1 || ''} | Celular: ${a.registro.celular1 || 'N/A'}</p>
-                                    <p class="text-sm text-orange-600">Manzana: ${a.registro.manzana || ''} | Lote: ${a.registro.lote || ''}</p>
-                                    <p class="font-semibold text-orange-800">Debe ${a.cuotasPendientes || 0} cuotas atrasadas</p>
-                                </div>
-                                <button onclick="showCuotasModal(${a.registro.id})" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
-                                    Ver Detalle
-                                </button>
+                if (!a || !a.registro) return; // Skip invalid entries
+                
+                atrasadosHTML += `
+                    <li class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-semibold text-orange-800">${a.registro.nombre1 || ''}</h4>
+                                <p class="text-sm text-orange-600">DNI: ${a.registro.dni1 || ''} | Celular: ${a.registro.celular1 || 'N/A'}</p>
+                                <p class="text-sm text-orange-600">Manzana: ${a.registro.manzana || ''} | Lote: ${a.registro.lote || ''}</p>
+                                <p class="font-semibold text-orange-800">Debe ${a.cuotasPendientes || 0} cuotas atrasadas</p>
                             </div>
-                        </li>
-                    `;
-                }
+                            <button onclick="showCuotasModal(${a.registro.id})" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
+                                Ver Detalle
+                            </button>
+                        </div>
+                    </li>
+                `;
             });
             atrasadosHTML += '</ul>';
         }
@@ -633,30 +642,35 @@ async function loadAtrasadosContent() {
         `;
     } catch (error) {
         console.error('Error cargando atrasados:', error);
-        document.getElementById('atrasadosContent').innerHTML = '<div class="text-red-500">Error al cargar atrasados</div>';
+        document.getElementById('atrasadosContent').innerHTML = '<div class="text-red-500">Error cargando atrasados</div>';
     }
 }
 
 // Contenido de la sección Reporte Mensual
 async function loadReporteMensualContent() {
-    const currentMonth = getCurrentMonth();
-    
-    document.getElementById('reporteMensualContent').innerHTML = `
-        <div class="space-y-6">
-            <div class="flex items-center space-x-4">
-                <label class="text-sm font-medium text-gray-700">Seleccionar mes:</label>
-                <input type="month" id="reporteMonth" value="${currentMonth}" onchange="updateReporteMensual()" 
-                       class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-teal-500">
-                <button onclick="exportReporteMensualPDF(document.getElementById('reporteMonth').value)" 
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
-                    <i class="fas fa-file-pdf mr-2"></i>Exportar PDF
-                </button>
+    try {
+        const currentMonth = getCurrentMonth();
+        
+        document.getElementById('reporteMensualContent').innerHTML = `
+            <div class="space-y-6">
+                <div class="flex items-center space-x-4">
+                    <label class="text-sm font-medium text-gray-700">Seleccionar mes:</label>
+                    <input type="month" id="reporteMonth" value="${currentMonth}" onchange="updateReporteMensual()" 
+                           class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-teal-500">
+                    <button onclick="exportReporteMensualPDF(document.getElementById('reporteMonth').value)" 
+                            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
+                        <i class="fas fa-file-pdf mr-2"></i>Exportar PDF
+                    </button>
+                </div>
+                <div id="reporteContent"></div>
             </div>
-            <div id="reporteContent"></div>
-        </div>
-    `;
-    
-    await updateReporteMensual();
+        `;
+        
+        await updateReporteMensual();
+    } catch (error) {
+        console.error('Error cargando reporte mensual:', error);
+        document.getElementById('reporteMensualContent').innerHTML = '<div class="text-red-500">Error cargando reporte mensual</div>';
+    }
 }
 
 async function updateReporteMensual() {
@@ -746,7 +760,7 @@ async function updateReporteMensual() {
         `;
     } catch (error) {
         console.error('Error actualizando reporte mensual:', error);
-        document.getElementById('reporteContent').innerHTML = '<div class="text-red-500">Error al cargar reporte</div>';
+        document.getElementById('reporteContent').innerHTML = '<div class="text-red-500">Error actualizando reporte</div>';
     }
 }
 
@@ -1412,7 +1426,7 @@ if (typeof showProjectionRange === 'function') window.showProjectionRange = show
 // Exponer funciones que se llaman desde HTML inline en componentes.js
 if (typeof editMoraModal === 'function') window.editMoraModal = editMoraModal;
 if (typeof handleEditMora === 'function') window.handleEditMora = handleEditMora;
-// Exponer updateReporteMensual para el onchange del input
-if (typeof updateReporteMensual === 'function') window.updateReporteMensual = updateReporteMensual;
 // Asegurar currentSection inicial también esté en window
 try { window.currentSection = currentSection; } catch (e) { /* ignore */ }
+// Exponer updateReporteMensual para que pueda ser llamada desde HTML inline
+window.updateReporteMensual = updateReporteMensual;
