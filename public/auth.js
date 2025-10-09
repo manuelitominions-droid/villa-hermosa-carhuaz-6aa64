@@ -1,33 +1,68 @@
-// auth.js - Sistema de autenticación y roles
+// auth.js - Sistema de autenticación
+
+// Función para esperar a que la base de datos esté lista
+function waitForDatabase() {
+    return new Promise((resolve) => {
+        if (window.database) {
+            resolve();
+        } else {
+            window.addEventListener('databaseReady', resolve, { once: true });
+        }
+    });
+}
 
 class AuthManager {
     constructor() {
         this.currentUser = null;
-        this.checkSession();
+        this.users = {
+            'villahermosa': { password: 'villa8956', rol: 'admin_principal' },
+            'admin': { password: 'admin123', rol: 'admin_secundario' },
+            'viewer': { password: 'view123', rol: 'ver' }
+        };
+        this.init();
     }
 
-    checkSession() {
-        const sessionUser = sessionStorage.getItem('villa_current_user');
-        if (sessionUser) {
-            this.currentUser = JSON.parse(sessionUser);
-            this.updateUI();
+    async init() {
+        // Esperar a que la base de datos esté lista
+        await waitForDatabase();
+        
+        // Cargar usuario desde localStorage
+        const savedUser = localStorage.getItem('villa_current_user');
+        if (savedUser) {
+            try {
+                this.currentUser = JSON.parse(savedUser);
+                this.updateUI();
+            } catch (e) {
+                localStorage.removeItem('villa_current_user');
+            }
         }
+        
+        console.log('✅ AuthManager inicializado');
     }
 
-    login(username, password) {
-        const user = database.getUsuarioByCredentials(username, password);
-        if (user) {
-            this.currentUser = user;
-            sessionStorage.setItem('villa_current_user', JSON.stringify(user));
-            this.updateUI();
-            return { success: true, user };
+    async login(username, password) {
+        try {
+            // Esperar a que la base de datos esté lista
+            await waitForDatabase();
+            
+            const user = this.users[username];
+            if (user && user.password === password) {
+                this.currentUser = { username, rol: user.rol };
+                localStorage.setItem('villa_current_user', JSON.stringify(this.currentUser));
+                this.updateUI();
+                return { success: true };
+            } else {
+                return { success: false, message: 'Usuario o contraseña incorrectos' };
+            }
+        } catch (error) {
+            console.error('Error en login:', error);
+            return { success: false, message: 'Error interno del sistema' };
         }
-        return { success: false, message: 'Usuario o contraseña incorrectos' };
     }
 
     logout() {
         this.currentUser = null;
-        sessionStorage.removeItem('villa_current_user');
+        localStorage.removeItem('villa_current_user');
         this.updateUI();
     }
 
@@ -35,20 +70,12 @@ class AuthManager {
         return this.currentUser !== null;
     }
 
+    isAdmin() {
+        return this.currentUser && (this.currentUser.rol === 'admin_principal' || this.currentUser.rol === 'admin_secundario');
+    }
+
     isAdminPrincipal() {
         return this.currentUser && this.currentUser.rol === 'admin_principal';
-    }
-
-    isAdmin() {
-        return this.currentUser && ['admin_principal', 'admin_secundario'].includes(this.currentUser.rol);
-    }
-
-    isViewer() {
-        return this.currentUser && this.currentUser.rol === 'ver';
-    }
-
-    getCurrentUser() {
-        return this.currentUser;
     }
 
     updateUI() {
@@ -56,39 +83,29 @@ class AuthManager {
         const mainContent = document.getElementById('mainContent');
         const mainNav = document.getElementById('mainNav');
         const userInfo = document.getElementById('userInfo');
-        const currentUserSpan = document.getElementById('currentUser');
-        const nuevoRegistroBtn = document.getElementById('nuevoRegistroBtn');
+        const currentUser = document.getElementById('currentUser');
         const crearUsuarioBtn = document.getElementById('crearUsuarioBtn');
 
         if (this.isLoggedIn()) {
-            loginSection.classList.add('hidden');
-            mainContent.classList.remove('hidden');
-            mainNav.classList.remove('hidden');
-            userInfo.classList.remove('hidden');
-            currentUserSpan.textContent = `👤 ${this.currentUser.username} (${this.currentUser.rol})`;
-
-            // Mostrar/ocultar botones según permisos
-            if (this.isAdmin()) {
-                nuevoRegistroBtn.classList.remove('hidden');
-            } else {
-                nuevoRegistroBtn.classList.add('hidden');
-            }
-
-            if (this.isAdminPrincipal()) {
-                crearUsuarioBtn.classList.remove('hidden');
-            } else {
-                crearUsuarioBtn.classList.add('hidden');
-            }
-
-            // Mostrar sección de inicio por defecto
-            if (typeof showSection === 'function') {
-                showSection('inicio');
+            if (loginSection) loginSection.classList.add('hidden');
+            if (mainContent) mainContent.classList.remove('hidden');
+            if (mainNav) mainNav.classList.remove('hidden');
+            if (userInfo) userInfo.classList.remove('hidden');
+            if (currentUser) currentUser.textContent = `Usuario: ${this.currentUser.username}`;
+            
+            // Mostrar botón de crear usuario solo para admin principal
+            if (crearUsuarioBtn) {
+                if (this.isAdminPrincipal()) {
+                    crearUsuarioBtn.classList.remove('hidden');
+                } else {
+                    crearUsuarioBtn.classList.add('hidden');
+                }
             }
         } else {
-            loginSection.classList.remove('hidden');
-            mainContent.classList.add('hidden');
-            mainNav.classList.add('hidden');
-            userInfo.classList.add('hidden');
+            if (loginSection) loginSection.classList.remove('hidden');
+            if (mainContent) mainContent.classList.add('hidden');
+            if (mainNav) mainNav.classList.add('hidden');
+            if (userInfo) userInfo.classList.add('hidden');
         }
     }
 
@@ -97,49 +114,63 @@ class AuthManager {
             return { success: false, message: 'No tienes permisos para crear usuarios' };
         }
 
-        try {
-            const usuarios = database.getUsuarios();
-            const existingUser = usuarios.find(u => u.username === userData.username);
-            
-            if (existingUser) {
-                return { success: false, message: 'El usuario ya existe' };
-            }
-
-            const newUser = database.addUsuario(userData);
-            return { success: true, user: newUser };
-        } catch (error) {
-            return { success: false, message: 'Error al crear el usuario' };
+        if (this.users[userData.username]) {
+            return { success: false, message: 'El usuario ya existe' };
         }
+
+        this.users[userData.username] = {
+            password: userData.password,
+            rol: userData.rol
+        };
+
+        return { success: true, message: 'Usuario creado exitosamente' };
     }
 }
 
-// Instancia global del gestor de autenticación
+// Crear instancia global del sistema de autenticación
 const auth = new AuthManager();
+window.auth = auth;
 
-// Funciones globales para el HTML
-function handleLogin(event) {
+// Función global para manejar el login
+async function handleLogin(event) {
     event.preventDefault();
     
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    const errorDiv = document.getElementById('loginError');
-    
-    const result = auth.login(username, password);
-    
-    if (result.success) {
-        errorDiv.classList.add('hidden');
-        document.getElementById('loginForm').reset();
-    } else {
-        errorDiv.textContent = result.message;
-        errorDiv.classList.remove('hidden');
+    const loginError = document.getElementById('loginError');
+
+    if (loginError) loginError.classList.add('hidden');
+
+    try {
+        const result = await auth.login(username, password);
+        
+        if (result.success) {
+            // Login exitoso - la UI se actualiza automáticamente
+            console.log('✅ Login exitoso');
+        } else {
+            if (loginError) {
+                loginError.textContent = result.message;
+                loginError.classList.remove('hidden');
+            }
+        }
+    } catch (error) {
+        console.error('Error en handleLogin:', error);
+        if (loginError) {
+            loginError.textContent = 'Error interno del sistema';
+            loginError.classList.remove('hidden');
+        }
     }
 }
 
+// Función global para logout
 function logout() {
     auth.logout();
 }
 
-// ✅ Hacer `auth` global (visible para otros scripts)
-window.auth = auth;
+// Hacer funciones disponibles globalmente
 window.handleLogin = handleLogin;
 window.logout = logout;
+
+console.log('✅ Sistema de autenticación cargado');
+
+export default auth;
