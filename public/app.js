@@ -52,6 +52,8 @@ let currentSection = 'inicio';
 
 // Inicialización de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Inicializando aplicación...');
+    
     // Verificar si hay usuario logueado
     // Usar getAuth() para obtener la instancia de auth de forma segura
     const _auth = getAuth();
@@ -63,10 +65,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (_auth && typeof _auth.isLoggedIn === 'function' && _auth.isLoggedIn()) {
         if (typeof showSection === 'function') showSection('inicio');
     }
+    
+    console.log('✅ Aplicación inicializada');
 });
 
 // Navegación entre secciones
 function showSection(sectionName) {
+    console.log(`📍 Navegando a sección: ${sectionName}`);
+    
     // Ocultar todas las secciones
     const sections = document.querySelectorAll('.section');
     sections.forEach(section => section.classList.add('hidden'));
@@ -84,6 +90,8 @@ function showSection(sectionName) {
         
         // Actualizar navegación activa
         updateActiveNav(sectionName);
+    } else {
+        console.error(`❌ Sección no encontrada: ${sectionName}Section`);
     }
 }
 
@@ -104,6 +112,8 @@ function updateActiveNav(sectionName) {
 
 // Cargar contenido específico de cada sección
 async function loadSectionContent(sectionName) {
+    console.log(`🔄 Cargando contenido de sección: ${sectionName}`);
+    
     try {
         switch (sectionName) {
             case 'inicio':
@@ -130,9 +140,12 @@ async function loadSectionContent(sectionName) {
             case 'crear-usuario':
                 loadCrearUsuarioContent();
                 break;
+            default:
+                console.warn(`⚠️ Sección no reconocida: ${sectionName}`);
         }
+        console.log(`✅ Contenido cargado para: ${sectionName}`);
     } catch (error) {
-        console.error(`Error cargando sección ${sectionName}:`, error);
+        console.error(`❌ Error cargando sección ${sectionName}:`, error);
         showNotification(`Error cargando la sección ${sectionName}`, 'error');
     }
 }
@@ -141,7 +154,10 @@ async function loadSectionContent(sectionName) {
 function loadInicioContent() {
     // El contenido de inicio ya está en el HTML
     // Solo necesitamos limpiar los resultados de búsqueda
-    document.getElementById('searchResults').innerHTML = '';
+    const searchResults = document.getElementById('searchResults');
+    if (searchResults) {
+        searchResults.innerHTML = '';
+    }
     
     // Mostrar el botón "Nuevo Registro" si el usuario tiene permisos
     const _auth = getAuth();
@@ -160,10 +176,15 @@ async function handleSearch(event) {
         const lote = document.getElementById('searchLote').value.trim();
         const query = document.getElementById('searchQuery').value.trim();
 
-        console.log('Buscar registros con:', { manzana, lote, query });
+        console.log('🔍 Buscar registros con:', { manzana, lote, query });
 
         const searchResult = await db.searchRegistros({ manzana, lote, query });
         const resultsContainer = document.getElementById('searchResults');
+
+        if (!resultsContainer) {
+            console.error('❌ Contenedor de resultados no encontrado');
+            return;
+        }
 
         if (searchResult.error) {
             console.warn('searchRegistros error:', searchResult.error);
@@ -203,7 +224,7 @@ async function handleSearch(event) {
             </div>
         `;
     } catch (err) {
-        console.error('Error en handleSearch:', err);
+        console.error('❌ Error en handleSearch:', err);
         showNotification('Error al realizar búsqueda. Revisa la consola para más detalles.', 'error');
     }
 }
@@ -211,22 +232,43 @@ async function handleSearch(event) {
 // Contenido de la sección Clientes
 async function loadClientesContent() {
     try {
+        console.log('🔄 Cargando clientes...');
         const registros = await db.getRegistros();
         const sortedRegistros = registros.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
         
-        document.getElementById('clientesCount').textContent = `Total de clientes: ${sortedRegistros.length}`;
-        document.getElementById('clientesTable').innerHTML = createRegistrosTable(sortedRegistros);
+        const clientesCount = document.getElementById('clientesCount');
+        const clientesTable = document.getElementById('clientesTable');
+        
+        if (clientesCount) {
+            clientesCount.textContent = `Total de clientes: ${sortedRegistros.length}`;
+        }
+        
+        if (clientesTable) {
+            clientesTable.innerHTML = createRegistrosTable(sortedRegistros);
+        }
+        
+        console.log(`✅ ${sortedRegistros.length} clientes cargados`);
     } catch (error) {
-        console.error('Error cargando clientes:', error);
-        document.getElementById('clientesCount').textContent = 'Error cargando clientes';
-        document.getElementById('clientesTable').innerHTML = '<div class="text-red-500">Error cargando los datos de clientes</div>';
+        console.error('❌ Error cargando clientes:', error);
+        const clientesCount = document.getElementById('clientesCount');
+        const clientesTable = document.getElementById('clientesTable');
+        
+        if (clientesCount) {
+            clientesCount.textContent = 'Error cargando clientes';
+        }
+        if (clientesTable) {
+            clientesTable.innerHTML = '<div class="text-red-500">Error cargando los datos de clientes</div>';
+        }
     }
 }
 
 // Filtrar clientes
 const filterClientes = debounce(async function() {
     try {
-        const query = document.getElementById('clientesSearch').value.trim().toLowerCase();
+        const searchInput = document.getElementById('clientesSearch');
+        if (!searchInput) return;
+        
+        const query = searchInput.value.trim().toLowerCase();
         const registros = await db.getRegistros();
         
         let filteredRegistros = registros;
@@ -241,10 +283,17 @@ const filterClientes = debounce(async function() {
         
         filteredRegistros.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
         
-        document.getElementById('clientesCount').textContent = `Total de clientes: ${filteredRegistros.length}`;
-        document.getElementById('clientesTable').innerHTML = createRegistrosTable(filteredRegistros);
+        const clientesCount = document.getElementById('clientesCount');
+        const clientesTable = document.getElementById('clientesTable');
+        
+        if (clientesCount) {
+            clientesCount.textContent = `Total de clientes: ${filteredRegistros.length}`;
+        }
+        if (clientesTable) {
+            clientesTable.innerHTML = createRegistrosTable(filteredRegistros);
+        }
     } catch (error) {
-        console.error('Error filtrando clientes:', error);
+        console.error('❌ Error filtrando clientes:', error);
     }
 }, 300);
 
@@ -258,7 +307,13 @@ async function loadProyeccionContent() {
         // Inicializar estado de vista de proyección (se usará para exportar lo visible)
         window._currentProjectionView = { mode: 'single', month: nextMonth, start: null, end: null };
 
-        document.getElementById('proyeccionContent').innerHTML = `
+        const proyeccionContent = document.getElementById('proyeccionContent');
+        if (!proyeccionContent) {
+            console.error('❌ Contenedor de proyección no encontrado');
+            return;
+        }
+
+        proyeccionContent.innerHTML = `
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
                     <h3 class="text-xl font-semibold text-gray-800">Proyección de Ingresos</h3>
@@ -284,15 +339,20 @@ async function loadProyeccionContent() {
         // Mostrar valor inicial de la proyección para el mes por defecto
         await showProjectionSingle();
     } catch (error) {
-        console.error('Error cargando proyección:', error);
-        document.getElementById('proyeccionContent').innerHTML = '<div class="text-red-500">Error cargando proyección</div>';
+        console.error('❌ Error cargando proyección:', error);
+        const proyeccionContent = document.getElementById('proyeccionContent');
+        if (proyeccionContent) {
+            proyeccionContent.innerHTML = '<div class="text-red-500">Error cargando proyección</div>';
+        }
     }
 }
 
 // Mostrar proyección para un mes seleccionado
 async function showProjectionSingle() {
     try {
-        const mes = document.getElementById('proyeccionMonth').value || getNextMonth();
+        const proyeccionMonth = document.getElementById('proyeccionMonth');
+        const mes = (proyeccionMonth ? proyeccionMonth.value : null) || getNextMonth();
+        
         // marcar vista actual
         window._currentProjectionView = { mode: 'single', month: mes, start: null, end: null };
         const proj = await db.getProjectionForMonth(mes);
@@ -301,21 +361,27 @@ async function showProjectionSingle() {
         const monto = proj.totalProjected || 0;
         const cuotasCount = proj.count || 0;
 
-        document.getElementById('proyeccionResult').innerHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-indigo-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-indigo-800 mb-2">Número de cuotas</h4>
-                    <p class="text-3xl font-bold text-indigo-600">${cuotasCount}</p>
+        const proyeccionResult = document.getElementById('proyeccionResult');
+        if (proyeccionResult) {
+            proyeccionResult.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-indigo-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-indigo-800 mb-2">Número de cuotas</h4>
+                        <p class="text-3xl font-bold text-indigo-600">${cuotasCount}</p>
+                    </div>
+                    <div class="bg-purple-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-purple-800 mb-2">Total proyectado</h4>
+                        <p class="text-3xl font-bold text-purple-600">${formatCurrency(monto)}</p>
+                    </div>
                 </div>
-                <div class="bg-purple-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-purple-800 mb-2">Total proyectado</h4>
-                    <p class="text-3xl font-bold text-purple-600">${formatCurrency(monto)}</p>
-                </div>
-            </div>
-        `;
+            `;
+        }
     } catch (error) {
-        console.error('Error en showProjectionSingle:', error);
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error cargando proyección</div>';
+        console.error('❌ Error en showProjectionSingle:', error);
+        const proyeccionResult = document.getElementById('proyeccionResult');
+        if (proyeccionResult) {
+            proyeccionResult.innerHTML = '<div class="text-red-500">Error cargando proyección</div>';
+        }
     }
 }
 
@@ -328,8 +394,11 @@ async function showProjectionTimeline() {
         window._currentProjectionView = { mode: 'timeline', month: null, start, end };
         const timeline = await db.getProjectionTimeline(start, end);
 
+        const proyeccionResult = document.getElementById('proyeccionResult');
+        if (!proyeccionResult) return;
+
         if (!timeline || timeline.length === 0) {
-            document.getElementById('proyeccionResult').innerHTML = '<div class="text-sm text-gray-500">No hay cuotas para proyectar.</div>';
+            proyeccionResult.innerHTML = '<div class="text-sm text-gray-500">No hay cuotas para proyectar.</div>';
             return;
         }
 
@@ -342,7 +411,7 @@ async function showProjectionTimeline() {
             </tr>
         `).join('');
 
-        document.getElementById('proyeccionResult').innerHTML = `
+        proyeccionResult.innerHTML = `
             <div>
                 <h4 class="text-lg font-semibold text-gray-800 mb-2">Proyección mes a mes (${getMonthName(start)} → ${getMonthName(end)})</h4>
                 <div class="overflow-x-auto">
@@ -362,8 +431,11 @@ async function showProjectionTimeline() {
             </div>
         `;
     } catch (error) {
-        console.error('Error en showProjectionTimeline:', error);
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error cargando timeline</div>';
+        console.error('❌ Error en showProjectionTimeline:', error);
+        const proyeccionResult = document.getElementById('proyeccionResult');
+        if (proyeccionResult) {
+            proyeccionResult.innerHTML = '<div class="text-red-500">Error cargando timeline</div>';
+        }
     }
 }
 
@@ -372,18 +444,21 @@ function exportProjectionPDF() {
     try {
         const view = window._currentProjectionView || { mode: 'single' };
         if (view.mode === 'single') {
-            const mes = view.month || document.getElementById('proyeccionMonth').value || getNextMonth();
+            const proyeccionMonth = document.getElementById('proyeccionMonth');
+            const mes = view.month || (proyeccionMonth ? proyeccionMonth.value : null) || getNextMonth();
             if (typeof exportProjectionMonthPDF === 'function') return exportProjectionMonthPDF(mes);
             if (typeof exportReporteMensualPDF === 'function') return exportReporteMensualPDF(mes);
         } else if (view.mode === 'timeline' || view.mode === 'range') {
-            const start = view.start || document.getElementById('proyeccionStart')?.value || getNextMonth();
-            const end = view.end || document.getElementById('proyeccionEnd')?.value || getNextMonth();
+            const proyeccionStart = document.getElementById('proyeccionStart');
+            const proyeccionEnd = document.getElementById('proyeccionEnd');
+            const start = view.start || (proyeccionStart ? proyeccionStart.value : null) || getNextMonth();
+            const end = view.end || (proyeccionEnd ? proyeccionEnd.value : null) || getNextMonth();
             if (typeof exportProjectionTimelinePDF === 'function') return exportProjectionTimelinePDF(start, end);
         }
 
         showNotification('Función de exportar no disponible para la vista actual', 'error');
     } catch (e) {
-        console.error('Error exportProjectionPDF', e);
+        console.error('❌ Error exportProjectionPDF', e);
         showNotification('Error al exportar proyección', 'error');
     }
 }
@@ -402,8 +477,11 @@ async function showProjectionRange(startMonth, endMonth) {
 
         // Obtener timeline para el rango
         const timeline = await db.getProjectionTimeline(startMonth, endMonth);
+        const proyeccionResult = document.getElementById('proyeccionResult');
+        if (!proyeccionResult) return;
+
         if (!timeline || timeline.length === 0) {
-            document.getElementById('proyeccionResult').innerHTML = '<div class="text-sm text-gray-500">No hay datos en ese rango.</div>';
+            proyeccionResult.innerHTML = '<div class="text-sm text-gray-500">No hay datos en ese rango.</div>';
             return;
         }
 
@@ -415,7 +493,7 @@ async function showProjectionRange(startMonth, endMonth) {
             </tr>
         `).join('');
 
-        document.getElementById('proyeccionResult').innerHTML = `
+        proyeccionResult.innerHTML = `
             <div>
                 <h4 class="text-lg font-semibold text-gray-800 mb-2">Proyección (${getMonthName(startMonth)} → ${getMonthName(endMonth)})</h4>
                 <div class="overflow-x-auto">
@@ -435,8 +513,11 @@ async function showProjectionRange(startMonth, endMonth) {
             </div>
         `;
     } catch (error) {
-        console.error('Error en showProjectionRange:', error);
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error cargando rango</div>';
+        console.error('❌ Error en showProjectionRange:', error);
+        const proyeccionResult = document.getElementById('proyeccionResult');
+        if (proyeccionResult) {
+            proyeccionResult.innerHTML = '<div class="text-red-500">Error cargando rango</div>';
+        }
     }
 }
 
@@ -451,7 +532,7 @@ async function exportProjectionTimeline() {
             showNotification('Función de exportar proyección no disponible', 'error');
         }
     } catch (e) {
-        console.error('Error exportProjectionTimeline', e);
+        console.error('❌ Error exportProjectionTimeline', e);
         showNotification('Error al exportar proyección', 'error');
     }
 }
@@ -467,7 +548,13 @@ async function loadEstadisticasContent() {
         const porcentajePagado = stats.porcentajePagado || 0;
         const porcentajeNoPagado = stats.porcentajeNoPagado || 0;
         
-        document.getElementById('estadisticasContent').innerHTML = `
+        const estadisticasContent = document.getElementById('estadisticasContent');
+        if (!estadisticasContent) {
+            console.error('❌ Contenedor de estadísticas no encontrado');
+            return;
+        }
+        
+        estadisticasContent.innerHTML = `
             <div class="space-y-6">
                 <div class="flex items-start justify-between">
                     <h3 class="text-xl font-semibold text-gray-800">Estadísticas de ${monthName}</h3>
@@ -532,8 +619,11 @@ async function loadEstadisticasContent() {
             </div>
         `;
     } catch (error) {
-        console.error('Error cargando estadísticas:', error);
-        document.getElementById('estadisticasContent').innerHTML = '<div class="text-red-500">Error cargando estadísticas</div>';
+        console.error('❌ Error cargando estadísticas:', error);
+        const estadisticasContent = document.getElementById('estadisticasContent');
+        if (estadisticasContent) {
+            estadisticasContent.innerHTML = '<div class="text-red-500">Error cargando estadísticas</div>';
+        }
     }
 }
 
@@ -590,15 +680,21 @@ async function loadPendientesContent() {
             }
         }
 
-        document.getElementById('pendientesContent').innerHTML = `
-            <div class="space-y-4">
-                <h3 class="text-xl font-semibold text-gray-800">Cuotas Pendientes de ${monthName}</h3>
-                ${pendientesHTML}
-            </div>
-        `;
+        const pendientesContent = document.getElementById('pendientesContent');
+        if (pendientesContent) {
+            pendientesContent.innerHTML = `
+                <div class="space-y-4">
+                    <h3 class="text-xl font-semibold text-gray-800">Cuotas Pendientes de ${monthName}</h3>
+                    ${pendientesHTML}
+                </div>
+            `;
+        }
     } catch (error) {
-        console.error('Error cargando pendientes:', error);
-        document.getElementById('pendientesContent').innerHTML = '<div class="text-red-500">Error cargando pendientes</div>';
+        console.error('❌ Error cargando pendientes:', error);
+        const pendientesContent = document.getElementById('pendientesContent');
+        if (pendientesContent) {
+            pendientesContent.innerHTML = '<div class="text-red-500">Error cargando pendientes</div>';
+        }
     }
 }
 
@@ -634,15 +730,21 @@ async function loadAtrasadosContent() {
             atrasadosHTML += '</ul>';
         }
         
-        document.getElementById('atrasadosContent').innerHTML = `
-            <div class="space-y-4">
-                <h3 class="text-xl font-semibold text-gray-800">Clientes con Cuotas Atrasadas</h3>
-                ${atrasadosHTML}
-            </div>
-        `;
+        const atrasadosContent = document.getElementById('atrasadosContent');
+        if (atrasadosContent) {
+            atrasadosContent.innerHTML = `
+                <div class="space-y-4">
+                    <h3 class="text-xl font-semibold text-gray-800">Clientes con Cuotas Atrasadas</h3>
+                    ${atrasadosHTML}
+                </div>
+            `;
+        }
     } catch (error) {
-        console.error('Error cargando atrasados:', error);
-        document.getElementById('atrasadosContent').innerHTML = '<div class="text-red-500">Error cargando atrasados</div>';
+        console.error('❌ Error cargando atrasados:', error);
+        const atrasadosContent = document.getElementById('atrasadosContent');
+        if (atrasadosContent) {
+            atrasadosContent.innerHTML = '<div class="text-red-500">Error cargando atrasados</div>';
+        }
     }
 }
 
@@ -651,7 +753,13 @@ async function loadReporteMensualContent() {
     try {
         const currentMonth = getCurrentMonth();
         
-        document.getElementById('reporteMensualContent').innerHTML = `
+        const reporteMensualContent = document.getElementById('reporteMensualContent');
+        if (!reporteMensualContent) {
+            console.error('❌ Contenedor de reporte mensual no encontrado');
+            return;
+        }
+        
+        reporteMensualContent.innerHTML = `
             <div class="space-y-6">
                 <div class="flex items-center space-x-4">
                     <label class="text-sm font-medium text-gray-700">Seleccionar mes:</label>
@@ -668,14 +776,20 @@ async function loadReporteMensualContent() {
         
         await updateReporteMensual();
     } catch (error) {
-        console.error('Error cargando reporte mensual:', error);
-        document.getElementById('reporteMensualContent').innerHTML = '<div class="text-red-500">Error cargando reporte mensual</div>';
+        console.error('❌ Error cargando reporte mensual:', error);
+        const reporteMensualContent = document.getElementById('reporteMensualContent');
+        if (reporteMensualContent) {
+            reporteMensualContent.innerHTML = '<div class="text-red-500">Error cargando reporte mensual</div>';
+        }
     }
 }
 
 async function updateReporteMensual() {
     try {
-        const selectedMonth = document.getElementById('reporteMonth').value;
+        const reporteMonth = document.getElementById('reporteMonth');
+        if (!reporteMonth) return;
+        
+        const selectedMonth = reporteMonth.value;
         const reporte = await db.getReporteMensual(selectedMonth);
         const monthName = getMonthName(selectedMonth);
         
@@ -700,75 +814,88 @@ async function updateReporteMensual() {
             });
         }
         
-        document.getElementById('reporteContent').innerHTML = `
-            <div class="space-y-6">
-                <h3 class="text-xl font-semibold text-gray-800">Resumen de ${monthName}</h3>
-                
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="bg-blue-50 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold text-blue-800">Total Clientes</h4>
-                        <p class="text-2xl font-bold text-blue-600">${reporte.totalClientes || 0}</p>
+        const reporteContent = document.getElementById('reporteContent');
+        if (reporteContent) {
+            reporteContent.innerHTML = `
+                <div class="space-y-6">
+                    <h3 class="text-xl font-semibold text-gray-800">Resumen de ${monthName}</h3>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-semibold text-blue-800">Total Clientes</h4>
+                            <p class="text-2xl font-bold text-blue-600">${reporte.totalClientes || 0}</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-semibold text-green-800">Con Cuotas</h4>
+                            <p class="text-2xl font-bold text-green-600">${reporte.totalCuotas || 0}</p>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-semibold text-purple-800">Al Contado</h4>
+                            <p class="text-2xl font-bold text-purple-600">${reporte.totalContado || 0}</p>
+                        </div>
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-semibold text-yellow-800">Total Ingresos</h4>
+                            <p class="text-xl font-bold text-yellow-600">${formatCurrency(reporte.totalGeneral || 0)}</p>
+                        </div>
                     </div>
-                    <div class="bg-green-50 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold text-green-800">Con Cuotas</h4>
-                        <p class="text-2xl font-bold text-green-600">${reporte.totalCuotas || 0}</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-teal-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-semibold text-teal-800">Ingresos por Iniciales</h4>
+                            <p class="text-xl font-bold text-teal-600">${formatCurrency(reporte.inicialesCuotas || 0)}</p>
+                        </div>
+                        <div class="bg-indigo-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-semibold text-indigo-800">Ingresos por Contado</h4>
+                            <p class="text-xl font-bold text-indigo-600">${formatCurrency(reporte.totalContadoMonto || 0)}</p>
+                        </div>
                     </div>
-                    <div class="bg-purple-50 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold text-purple-800">Al Contado</h4>
-                        <p class="text-2xl font-bold text-purple-600">${reporte.totalContado || 0}</p>
-                    </div>
-                    <div class="bg-yellow-50 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold text-yellow-800">Total Ingresos</h4>
-                        <p class="text-xl font-bold text-yellow-600">${formatCurrency(reporte.totalGeneral || 0)}</p>
+                    
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Detalle de Registros</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white border border-gray-200 rounded-lg">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DNI</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manzana</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lote</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forma Pago</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto Total</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inicial</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    ${registrosHTML}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-teal-50 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold text-teal-800">Ingresos por Iniciales</h4>
-                        <p class="text-xl font-bold text-teal-600">${formatCurrency(reporte.inicialesCuotas || 0)}</p>
-                    </div>
-                    <div class="bg-indigo-50 p-4 rounded-lg">
-                        <h4 class="text-sm font-semibold text-indigo-800">Ingresos por Contado</h4>
-                        <p class="text-xl font-bold text-indigo-600">${formatCurrency(reporte.totalContadoMonto || 0)}</p>
-                    </div>
-                </div>
-                
-                <div>
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Detalle de Registros</h3>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DNI</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manzana</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lote</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forma Pago</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto Total</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inicial</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200">
-                                ${registrosHTML}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        `;
+            `;
+        }
     } catch (error) {
-        console.error('Error actualizando reporte mensual:', error);
-        document.getElementById('reporteContent').innerHTML = '<div class="text-red-500">Error actualizando reporte</div>';
+        console.error('❌ Error actualizando reporte mensual:', error);
+        const reporteContent = document.getElementById('reporteContent');
+        if (reporteContent) {
+            reporteContent.innerHTML = '<div class="text-red-500">Error actualizando reporte</div>';
+        }
     }
 }
 
 // Contenido de la sección Crear Usuario
 function loadCrearUsuarioContent() {
     const _auth = getAuth();
+    const crearUsuarioContent = document.getElementById('crearUsuarioContent');
+    
+    if (!crearUsuarioContent) {
+        console.error('❌ Contenedor de crear usuario no encontrado');
+        return;
+    }
+    
     if (!(_auth && _auth.isAdminPrincipal && _auth.isAdminPrincipal())) {
-        document.getElementById('crearUsuarioContent').innerHTML = `
+        crearUsuarioContent.innerHTML = `
             <div class="text-center py-8 text-red-600">
                 <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
                 <p class="text-lg font-semibold">Solo el administrador principal puede crear usuarios.</p>
@@ -777,7 +904,7 @@ function loadCrearUsuarioContent() {
         return;
     }
     
-    document.getElementById('crearUsuarioContent').innerHTML = `
+    crearUsuarioContent.innerHTML = `
         <form id="crearUsuarioForm" onsubmit="handleCrearUsuario(event)" class="max-w-md">
             <div class="space-y-4">
                 <div>
@@ -890,6 +1017,8 @@ async function handleCrearUsuario(event) {
     const result = _auth ? _auth.createUser(userData) : { success: false, message: 'Sistema de autenticación no disponible' };
     const messageDiv = document.getElementById('crearUsuarioMessage');
     
+    if (!messageDiv) return;
+    
     if (result.success) {
         messageDiv.innerHTML = `
             <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700">
@@ -924,509 +1053,20 @@ async function deleteRegistro(registroId) {
     }
 }
 
-// ACTUALIZADO: Modal para pagar cuota - Acepta cualquier tipo de archivo
-async function showPagarCuotaModal(cuotaId) {
-    const _auth = getAuth();
-    if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
-        showNotification('No tienes permisos para registrar pagos', 'error');
-        return;
-    }
-    
-    const cuota = await db.getCuotaById(cuotaId);
-    if (!cuota || cuota.pagado) {
-        showNotification('No se puede registrar el pago para esta cuota', 'error');
-        return;
-    }
-    
-    const cuotaDisplay = cuota.numero === 0 ? 'Inicial' : `N° ${cuota.numero}`;
-    
-    // Obtener fecha actual en zona horaria de Perú
-    const fechaHoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
-    
-    const modalHTML = `
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-gray-800">
-                        <i class="fas fa-credit-card mr-3 text-green-500"></i>Registrar Pago
-                    </h2>
-                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-                </div>
-                
-                <div class="mb-4">
-                    <p class="text-gray-600">Cuota: <strong>${cuotaDisplay}</strong></p>
-                    <p class="text-gray-600">Monto: <strong>${formatCurrency(cuota.monto)}</strong></p>
-                </div>
-                
-                <form id="pagarCuotaForm" onsubmit="handlePagarCuota(event, ${cuotaId})">
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Fecha de Pago *</label>
-                            <input type="date" name="fecha_pago" required value="${fechaHoyPeru}"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">Puedes seleccionar cualquier fecha (zona horaria: Perú)</p>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Vouchers (opcional)</label>
-                            <input type="file" name="vouchers" multiple accept="*/*"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">✅ Acepta cualquier archivo: imágenes, PDF, Excel, etc. (sin límite de tamaño)</p>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Boletas (opcional)</label>
-                            <input type="file" name="boletas" multiple accept="*/*"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">✅ Acepta cualquier archivo (las imágenes se optimizan automáticamente)</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex justify-end space-x-4 mt-6">
-                        <button type="button" onclick="closeModal()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                            Cancelar
-                        </button>
-                        <button type="submit" class="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg">
-                            Registrar Pago
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('modalContainer').innerHTML = modalHTML;
-}
-
-// ACTUALIZADO: Manejo de pago de cuota con compresión automática
-async function handlePagarCuota(event, cuotaId) {
-    event.preventDefault();
-    
-    const formData = new FormData(event.target);
-    const fechaPago = formData.get('fecha_pago');
-    const vouchersFiles = formData.getAll('vouchers');
-    const boletasFiles = formData.getAll('boletas');
-    
-    // Validar formato de fecha (YYYY-MM-DD)
-    if (fechaPago && !/^\d{4}-\d{2}-\d{2}$/.test(fechaPago)) {
-        showNotification('Formato de fecha inválido. Usa YYYY-MM-DD.', 'error');
-        return;
-    }
-    
-    // Mostrar indicador de carga si hay archivos
-    const totalFiles = vouchersFiles.length + boletasFiles.length;
-    if (totalFiles > 0) {
-        showNotification(`Procesando ${totalFiles} archivo(s)... Por favor espera.`, 'info');
-    }
-    
-    try {
-        // Procesar vouchers y boletas usando uploads con retries y esperar por todos (cada archivo es independiente)
-        const voucherFilesToUpload = (vouchersFiles || []).filter(f => f && f.size > 0);
-        const boletaFilesToUpload = (boletasFiles || []).filter(f => f && f.size > 0);
-
-        const allFilePromises = [];
-
-        voucherFilesToUpload.forEach(f => allFilePromises.push(uploadWithRetry(f, cuotaId, 'voucher', { retries: 2, timeoutMs: 45000 }).then(r => r)));
-        boletaFilesToUpload.forEach(f => allFilePromises.push(uploadWithRetry(f, cuotaId, 'boleta', { retries: 2, timeoutMs: 45000 }).then(r => r)));
-
-        const settled = await Promise.allSettled(allFilePromises);
-
-        const failedUploads = [];
-        const successCount = { voucher: 0, boleta: 0 };
-
-        settled.forEach(s => {
-            if (s.status === 'fulfilled' && s.value && s.value.status === 'fulfilled') {
-                const t = s.value.tipo || (s.value.res && s.value.res.tipo) || 'voucher';
-                successCount[t] = (successCount[t] || 0) + 1;
-                console.info(`Upload success: ${s.value.fileName} (${t})`);
-            } else if (s.status === 'fulfilled' && s.value && s.value.status === 'rejected') {
-                failedUploads.push({ file: s.value.fileName, tipo: s.value.tipo, err: s.value.err });
-                console.warn(`Upload failed after retries: ${s.value.fileName}`, s.value.err);
-            } else if (s.status === 'rejected') {
-                failedUploads.push({ file: '(unknown)', tipo: 'unknown', err: s.reason });
-                console.warn('Upload promise rejected:', s.reason);
-            }
-        });
-
-        // Mostrar resumen de subida
-        const totalAttempted = voucherFilesToUpload.length + boletaFilesToUpload.length;
-        const totalSucceeded = (successCount.voucher || 0) + (successCount.boleta || 0);
-
-        if (failedUploads.length > 0) {
-            showNotification(`${totalSucceeded}/${totalAttempted} archivos subidos. ${failedUploads.length} fallaron. Revisa la consola.`, 'warning');
-        } else if (totalAttempted > 0) {
-            showNotification(`Todos los archivos (${totalSucceeded}) subidos correctamente`, 'success');
-        }
-        
-        // Actualizar cuota como pagada
-        await db.updateCuota(cuotaId, {
-            pagado: 1,
-            fecha_pago: fechaPago
-        });
-        
-        // Intentar actualizar la UI del modal de cuotas sin forzar un cierre que cause un parpadeo
-        const cuota = await db.getCuotaById(cuotaId);
-        if (cuota) {
-            showNotification('Pago registrado exitosamente', 'success');
-            // Actualizar la fila del cliente inmediatamente (si está visible)
-            try { if (typeof window.updateRegistroRow === 'function') window.updateRegistroRow(cuota.registro_id); } catch(e){}
-            // Notificar a otras pestañas
-            try {
-                const payload = { type: 'registro-updated', registroId: cuota.registro_id };
-                if (window._villa_bc) window._villa_bc.postMessage(payload);
-                else if (typeof window._villa_sendMessageFallback === 'function') window._villa_sendMessageFallback(payload);
-            } catch (e) {}
-            // Reemplazar el contenido del modal directamente (showCuotasModal escribe en modalContainer)
-            if (typeof showCuotasModal === 'function') showCuotasModal(cuota.registro_id);
-        } else {
-            // Fallback seguro: cerrar modal y recargar la sección actual
-            showNotification('Pago registrado. Si no ves el detalle, recarga la sección Clientes.', 'success');
-            closeModal();
-            loadSectionContent(currentSection);
-        }
-        
-    } catch (error) {
-        showNotification('Error al registrar el pago', 'error');
-        console.error(error);
-    }
-}
-
-// Modal para editar pago
-async function showEditarPagoModal(cuotaId) {
-    const _auth = getAuth();
-    if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
-        showNotification('No tienes permisos para editar pagos', 'error');
-        return;
-    }
-    
-    const cuota = await db.getCuotaById(cuotaId);
-    if (!cuota) {
-        showNotification('Cuota no encontrada', 'error');
-        return;
-    }
-    
-    const vouchers = await db.getVouchersByCuotaId(cuotaId);
-    const boletas = await db.getBoletasByCuotaId(cuotaId);
-    const cuotaDisplay = cuota.numero === 0 ? 'Inicial' : `N° ${cuota.numero}`;
-    
-    let vouchersHTML = '';
-    if (vouchers.length > 0) {
-        vouchers.forEach(v => {
-            const sizeInfo = v.file_size ? ` (${(v.file_size / 1024 / 1024).toFixed(2)} MB)` : '';
-            vouchersHTML += `
-                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
-                    <span class="text-sm">${v.file_name}${sizeInfo}</span>
-                    <div class="space-x-2">
-                        <button onclick="viewFile('${v.file_data}', '${v.file_name}')" class="text-blue-600 hover:text-blue-800 text-xs">Ver</button>
-                        <button onclick="deleteVoucher(${v.id}, ${cuotaId})" class="text-red-600 hover:text-red-800 text-xs">Eliminar</button>
-                    </div>
-                </div>
-            `;
-        });
-    } else {
-        vouchersHTML = '<p class="text-gray-500 text-sm">No hay vouchers registrados</p>';
-    }
-    
-    let boletasHTML = '';
-    if (boletas.length > 0) {
-        boletas.forEach(b => {
-            const sizeInfo = b.file_size ? ` (${(b.file_size / 1024 / 1024).toFixed(2)} MB)` : '';
-            boletasHTML += `
-                <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
-                    <span class="text-sm">${b.file_name}${sizeInfo}</span>
-                    <div class="space-x-2">
-                        <button onclick="viewFile('${b.file_data}', '${b.file_name}')" class="text-blue-600 hover:text-blue-800 text-xs">Ver</button>
-                        <button onclick="deleteBoleta(${b.id}, ${cuotaId})" class="text-red-600 hover:text-red-800 text-xs">Eliminar</button>
-                    </div>
-                </div>
-            `;
-        });
-    } else {
-        boletasHTML = '<p class="text-gray-500 text-sm">No hay boletas registradas</p>';
-    }
-    
-    const modalHTML = `
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-gray-800">
-                        <i class="fas fa-edit mr-3 text-orange-500"></i>Editar Pago - Cuota ${cuotaDisplay}
-                    </h2>
-                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-                </div>
-                
-                <div class="space-y-6">
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Información Actual</h3>
-                        <p class="text-gray-600">Fecha de Pago: <strong>${formatFecha(cuota.fecha_pago)}</strong></p>
-                        <p class="text-gray-600">Monto: <strong>${formatCurrency(cuota.monto)}</strong></p>
-                    </div>
-                    
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Vouchers Actuales</h3>
-                        <div class="space-y-2">
-                            ${vouchersHTML}
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Boletas Actuales</h3>
-                        <div class="space-y-2">
-                            ${boletasHTML}
-                        </div>
-                    </div>
-                    
-                    <form id="editarPagoForm" onsubmit="handleEditarPago(event, ${cuotaId})">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Actualizar Información</h3>
-                        
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Nueva fecha de pago</label>
-                                <input type="date" name="fecha_pago" value="${cuota.fecha_pago || ''}"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                                <p class="text-xs text-gray-500 mt-1">Zona horaria: Perú</p>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Agregar nuevos vouchers</label>
-                                <input type="file" name="vouchers" multiple accept="*/*"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                                <p class="text-xs text-gray-500 mt-1">✅ Cualquier tipo de archivo</p>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Agregar nuevas boletas</label>
-                                <input type="file" name="boletas" multiple accept="*/*"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                                <p class="text-xs text-gray-500 mt-1">✅ Cualquier tipo de archivo</p>
-                            </div>
-                        </div>
-                        
-                        <div class="flex justify-end space-x-4 mt-6">
-                            <button type="button" onclick="closeModal()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                                Cancelar
-                            </button>
-                            <button type="submit" class="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg">
-                                Actualizar Pago
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('modalContainer').innerHTML = modalHTML;
-}
-
-// Manejo de editar pago
-async function handleEditarPago(event, cuotaId) {
-    event.preventDefault();
-    
-    const formData = new FormData(event.target);
-    const fechaPago = formData.get('fecha_pago');
-    const vouchersFiles = formData.getAll('vouchers');
-    const boletasFiles = formData.getAll('boletas');
-    
-    // Mostrar indicador de carga si hay archivos
-    const totalFiles = vouchersFiles.length + boletasFiles.length;
-    if (totalFiles > 0) {
-        showNotification(`Procesando ${totalFiles} archivo(s)... Por favor espera.`, 'info');
-    }
-    
-    try {
-        // Actualizar fecha si se proporcionó
-        if (fechaPago) {
-            await db.updateCuota(cuotaId, { fecha_pago: fechaPago });
-        }
-        
-        // Procesar nuevos vouchers y boletas con retries y no bloquear por uno fallido
-        const voucherFilesToUpload = (vouchersFiles || []).filter(f => f && f.size > 0);
-        const boletaFilesToUpload = (boletasFiles || []).filter(f => f && f.size > 0);
-
-        const allFilePromisesEdit = [];
-        voucherFilesToUpload.forEach(f => allFilePromisesEdit.push(uploadWithRetry(f, cuotaId, 'voucher', { retries: 2, timeoutMs: 45000 })));
-        boletaFilesToUpload.forEach(f => allFilePromisesEdit.push(uploadWithRetry(f, cuotaId, 'boleta', { retries: 2, timeoutMs: 45000 })));
-
-        const settledEdit = await Promise.allSettled(allFilePromisesEdit);
-
-        const failedUploadsEdit = [];
-        const successCountEdit = { voucher: 0, boleta: 0 };
-
-        settledEdit.forEach(s => {
-            if (s.status === 'fulfilled' && s.value && s.value.status === 'fulfilled') {
-                const t = s.value.tipo || 'voucher';
-                successCountEdit[t] = (successCountEdit[t] || 0) + 1;
-                console.info(`Upload success (editar): ${s.value.fileName} (${t})`);
-            } else if (s.status === 'fulfilled' && s.value && s.value.status === 'rejected') {
-                failedUploadsEdit.push({ file: s.value.fileName, tipo: s.value.tipo, err: s.value.err });
-                console.warn(`Upload failed after retries (editar): ${s.value.fileName}`, s.value.err);
-            } else if (s.status === 'rejected') {
-                failedUploadsEdit.push({ file: '(unknown)', tipo: 'unknown', err: s.reason });
-                console.warn('Upload promise rejected (editar):', s.reason);
-            }
-        });
-
-        const totalAttemptedEdit = voucherFilesToUpload.length + boletaFilesToUpload.length;
-        const totalSucceededEdit = (successCountEdit.voucher || 0) + (successCountEdit.boleta || 0);
-
-        if (failedUploadsEdit.length > 0) {
-            showNotification(`${totalSucceededEdit}/${totalAttemptedEdit} archivos subidos. ${failedUploadsEdit.length} fallaron. Revisa la consola.`, 'warning');
-        } else if (totalAttemptedEdit > 0) {
-            showNotification(`Todos los archivos (${totalSucceededEdit}) subidos correctamente`, 'success');
-        }
-        
-        // Intentar reabrir/actualizar el modal de cuotas después de editar
-        const cuota = await db.getCuotaById(cuotaId);
-        if (cuota) {
-            showNotification('Pago actualizado exitosamente', 'success');
-            try { if (typeof window.updateRegistroRow === 'function') window.updateRegistroRow(cuota.registro_id); } catch(e){}
-            try {
-                const payload = { type: 'registro-updated', registroId: cuota.registro_id };
-                if (window._villa_bc) window._villa_bc.postMessage(payload);
-                else if (typeof window._villa_sendMessageFallback === 'function') window._villa_sendMessageFallback(payload);
-            } catch (e) {}
-            showCuotasModal(cuota.registro_id);
-        } else {
-            showNotification('Pago actualizado. Si no ves el detalle, recarga la sección Clientes.', 'success');
-            closeModal();
-            loadSectionContent(currentSection);
-        }
-        
-    } catch (error) {
-        showNotification('Error al actualizar el pago', 'error');
-        console.error(error);
-    }
-}
-
-// Modal para editar la mora manualmente
-async function editMoraModal(cuotaId) {
-    const _auth = getAuth();
-    if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
-        showNotification('No tienes permisos para editar la mora', 'error');
-        return;
-    }
-
-    const cuota = await db.getCuotaById(cuotaId);
-    if (!cuota) return showNotification('Cuota no encontrada', 'error');
-
-    const currentMoraManual = cuota.mora_manual ? cuota.mora_manual : '';
-
-    const modalHTML = `
-        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold">Editar Mora Manual - Cuota ${cuota.numero === 0 ? 'Inicial' : cuota.numero}</h3>
-                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">×</button>
-                </div>
-
-                <form id="editMoraForm">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Mora manual (S/)</label>
-                        <input type="number" step="0.01" min="0" name="mora_manual" value="${currentMoraManual}" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                        <p class="text-xs text-gray-500 mt-2">Si dejas vacío o 0, se usará el cálculo automático.</p>
-                    </div>
-
-                    <div class="flex justify-end space-x-3">
-                        <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded text-gray-700">Cancelar</button>
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded">Guardar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('modalContainer').innerHTML = modalHTML;
-
-    // Adjuntar listener de submit de forma segura para asegurar que event.preventDefault
-    // funcione y evitar que el formulario haga submit nativo redirigiendo la página.
-    try {
-        const editMoraFormEl = document.getElementById('editMoraForm');
-        if (editMoraFormEl) {
-            // Remover listeners previos por seguridad
-            editMoraFormEl.addEventListener('submit', function _handleEditMoraSubmit(e) {
-                e.preventDefault();
-                try { handleEditMora(e, cuotaId); } catch (err) { console.error('handleEditMora submit error', err); }
-            });
-        }
-    } catch (e) { /* ignore */ }
-}
-
-async function handleEditMora(event, cuotaId) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    let moraVal = formData.get('mora_manual');
-    moraVal = moraVal === null || moraVal === '' ? 0 : parseFloat(moraVal);
-    if (isNaN(moraVal) || moraVal < 0) return showNotification('Ingresa un valor válido para la mora', 'error');
-
-    try {
-        if (moraVal === 0) {
-            // remover mora_manual
-            await db.updateCuota(cuotaId, { mora_manual: 0 });
-        } else {
-            await db.updateCuota(cuotaId, { mora_manual: moraVal });
-        }
-
-        showNotification('Mora actualizada', 'success');
-        const cuota = await db.getCuotaById(cuotaId);
-        if (cuota && typeof showCuotasModal === 'function') {
-            showCuotasModal(cuota.registro_id);
-        } else {
-            closeModal();
-            loadSectionContent(currentSection);
-        }
-    } catch (err) {
-        console.error('Error al actualizar mora:', err);
-        showNotification('Error al actualizar la mora', 'error');
-    }
-}
-
-// Eliminar voucher
-async function deleteVoucher(voucherId, cuotaId) {
-    confirmAction('¿Seguro que deseas eliminar este voucher?', async () => {
-        await db.deleteVoucher(voucherId);
-        showNotification('Voucher eliminado exitosamente', 'success');
-        showEditarPagoModal(cuotaId);
-    });
-}
-
-// Eliminar boleta
-async function deleteBoleta(boletaId, cuotaId) {
-    confirmAction('¿Seguro que deseas eliminar esta boleta?', async () => {
-        await db.deleteBoleta(boletaId);
-        showNotification('Boleta eliminada exitosamente', 'success');
-        showEditarPagoModal(cuotaId);
-    });
-}
-
 // Hacer visible globalmente
 window.showSection = showSection;
-// Exponer loadSectionContent para que otros scripts (HTML inline / componentes) puedan recargar la sección
-if (typeof loadSectionContent === 'function') window.loadSectionContent = loadSectionContent;
+window.loadSectionContent = loadSectionContent;
 window.handleNewRegistro = handleNewRegistro;
 window.handleCrearUsuario = handleCrearUsuario;
-// Exponer handlers usados por atributos inline en HTML
 window.handleSearch = handleSearch;
 window.filterClientes = filterClientes;
-window.handlePagarCuota = handlePagarCuota;
-window.handleEditarPago = handleEditarPago;
-// Algunas funciones de pago se definen aquí y deben estar disponibles globalmente
-if (typeof showPagarCuotaModal === 'function') window.showPagarCuotaModal = showPagarCuotaModal;
-if (typeof showEditarPagoModal === 'function') window.showEditarPagoModal = showEditarPagoModal;
-// Exponer funciones de eliminación para que onclick en HTML pueda llamarlas
-if (typeof deleteRegistro === 'function') window.deleteRegistro = deleteRegistro;
-if (typeof deleteVoucher === 'function') window.deleteVoucher = deleteVoucher;
-if (typeof deleteBoleta === 'function') window.deleteBoleta = deleteBoleta;
-// Exponer funciones de Proyección usadas por botones inline
-if (typeof showProjectionSingle === 'function') window.showProjectionSingle = showProjectionSingle;
-if (typeof showProjectionTimeline === 'function') window.showProjectionTimeline = showProjectionTimeline;
-if (typeof exportProjectionPDF === 'function') window.exportProjectionPDF = exportProjectionPDF;
-if (typeof exportProjectionTimeline === 'function') window.exportProjectionTimeline = exportProjectionTimeline;
-if (typeof showProjectionRange === 'function') window.showProjectionRange = showProjectionRange;
-// Exponer funciones que se llaman desde HTML inline en componentes.js
-if (typeof editMoraModal === 'function') window.editMoraModal = editMoraModal;
-if (typeof handleEditMora === 'function') window.handleEditMora = handleEditMora;
-// Asegurar currentSection inicial también esté en window
-try { window.currentSection = currentSection; } catch (e) { /* ignore */ }
-// Exponer updateReporteMensual para que pueda ser llamada desde HTML inline
+window.deleteRegistro = deleteRegistro;
+window.showProjectionSingle = showProjectionSingle;
+window.showProjectionTimeline = showProjectionTimeline;
+window.exportProjectionPDF = exportProjectionPDF;
+window.exportProjectionTimeline = exportProjectionTimeline;
+window.showProjectionRange = showProjectionRange;
 window.updateReporteMensual = updateReporteMensual;
+window.currentSection = currentSection;
+
+console.log('✅ App.js cargado y funciones expuestas globalmente');
