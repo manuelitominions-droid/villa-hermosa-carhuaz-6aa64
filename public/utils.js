@@ -190,7 +190,7 @@ function getMonthName(monthStr) {
     return date.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
 }
 
-// --- Export y window global ---
+// --- Export y window global actualizado ---
 export { 
   calcularMora,
   formatFecha,
@@ -202,7 +202,14 @@ export {
   formatCurrency,
   getCurrentMonth,
   getNextMonth,
-  getMonthName
+  getMonthName,
+  debounce,        // ✅ agregar debounce
+  handleFileUpload,
+  compressImage,
+  processFile,
+  downloadFile,
+  showNotification,
+  confirmAction
 };
 
 window.calcularMora = calcularMora;
@@ -216,3 +223,10 @@ window.formatCurrency = formatCurrency;
 window.getCurrentMonth = getCurrentMonth;
 window.getNextMonth = getNextMonth;
 window.getMonthName = getMonthName;
+window.debounce = debounce;   // ✅ agregar debounce
+window.handleFileUpload = handleFileUpload;
+window.compressImage = compressImage;
+window.processFile = processFile;
+window.downloadFile = downloadFile;
+window.showNotification = showNotification;
+window.confirmAction = confirmAction;
