@@ -2,6 +2,19 @@
 
 import db from './database-firebase.js'; // 🔥 Importar DatabaseManager
 
+// --- FUNCIÓN DEBOUNCE ---
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // Cálculo de mora
 function calcularMora(monto, fechaVencimiento, fechaPago) {
     if (!fechaPago) {
@@ -12,24 +25,17 @@ function calcularMora(monto, fechaVencimiento, fechaPago) {
     const fechaP = new Date(fechaPago);
     const dias = Math.floor((fechaP - fechaV) / (1000 * 60 * 60 * 24));
     
-    if (dias <= 5) {
-        return 0;
-    }
+    if (dias <= 5) return 0;
     
     let moraTotal = 0;
     
-    // Calcular mora del rango 6-14 días (1%)
     if (dias >= 6) {
-        const diasRango1 = Math.min(dias, 14) - 5; // días del 6 al 14
-        const moraRango1 = monto * 0.01 * diasRango1;
-        moraTotal += moraRango1;
+        const diasRango1 = Math.min(dias, 14) - 5;
+        moraTotal += monto * 0.01 * diasRango1;
     }
-    
-    // Calcular mora del rango 15+ días (1.5%)
     if (dias >= 15) {
-        const diasRango2 = dias - 14; // días del 15 en adelante
-        const moraRango2 = monto * 0.015 * diasRango2;
-        moraTotal += moraRango2;
+        const diasRango2 = dias - 14;
+        moraTotal += monto * 0.015 * diasRango2;
     }
     
     return Math.round(moraTotal * 100) / 100;
@@ -52,7 +58,7 @@ function formatFecha(fecha) {
     }
 }
 
-// Generar cuotas con fechas correctas para Perú
+// Generar cuotas
 async function generarCuotas(registroId, formaPago, montoTotal, inicial, numeroCuotas, montosPersonalizados = null) {
     const cuotas = [];
     
@@ -123,8 +129,6 @@ async function regenerarCuotasConMontos(registroId, montosPersonalizados) {
     if (!registro) return false;
 
     const cuotasExistentes = await db.getCuotasByRegistroId(registroId);
-    const cuotaInicial = cuotasExistentes.find(c => c.numero === 0);
-
     for (const c of cuotasExistentes) {
         if (c.numero !== 0) await db.deleteCuota(c.id);
     }
@@ -153,21 +157,11 @@ async function regenerarCuotasConMontos(registroId, montosPersonalizados) {
     return true;
 }
 
-// --- RESTO DEL CÓDIGO QUEDA IGUAL ---
 // Validaciones
-function validarDNI(dni) {
-    return /^\d{7,12}$/.test(dni);
-}
-function validarEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-function validarCelular(celular) {
-    return /^\d{8,15}$/.test(celular);
-}
-function formatCurrency(amount) {
-    return `S/ ${parseFloat(amount).toFixed(2)}`;
-}
+function validarDNI(dni) { return /^\d{7,12}$/.test(dni); }
+function validarEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function validarCelular(celular) { return /^\d{8,15}$/.test(celular); }
+function formatCurrency(amount) { return `S/ ${parseFloat(amount).toFixed(2)}`; }
 function getCurrentMonth() {
     const fechaPeru = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Lima"}));
     const year = fechaPeru.getFullYear();
@@ -178,10 +172,7 @@ function getNextMonth() {
     const fechaPeru = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Lima"}));
     let year = fechaPeru.getFullYear();
     let month = fechaPeru.getMonth() + 2;
-    if (month > 12) {
-        month = 1;
-        year += 1;
-    }
+    if (month > 12) { month = 1; year += 1; }
     return `${year}-${String(month).padStart(2, '0')}`;
 }
 function getMonthName(monthStr) {
@@ -190,28 +181,23 @@ function getMonthName(monthStr) {
     return date.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
 }
 
-// --- Export y window global actualizado ---
+// --- EXPORTAR ---
 export { 
-  calcularMora,
-  formatFecha,
-  generarCuotas,
-  regenerarCuotasConMontos,
-  validarDNI,
-  validarEmail,
-  validarCelular,
-  formatCurrency,
-  getCurrentMonth,
-  getNextMonth,
-  getMonthName,
-  debounce,        // ✅ agregar debounce
-  handleFileUpload,
-  compressImage,
-  processFile,
-  downloadFile,
-  showNotification,
-  confirmAction
+    calcularMora,
+    formatFecha,
+    generarCuotas,
+    regenerarCuotasConMontos,
+    validarDNI,
+    validarEmail,
+    validarCelular,
+    formatCurrency,
+    getCurrentMonth,
+    getNextMonth,
+    getMonthName,
+    debounce // ✅ ahora correctamente definido y exportado
 };
 
+// --- ACCESIBLE GLOBAL ---
 window.calcularMora = calcularMora;
 window.formatFecha = formatFecha;
 window.generarCuotas = generarCuotas;
@@ -223,10 +209,4 @@ window.formatCurrency = formatCurrency;
 window.getCurrentMonth = getCurrentMonth;
 window.getNextMonth = getNextMonth;
 window.getMonthName = getMonthName;
-window.debounce = debounce;   // ✅ agregar debounce
-window.handleFileUpload = handleFileUpload;
-window.compressImage = compressImage;
-window.processFile = processFile;
-window.downloadFile = downloadFile;
-window.showNotification = showNotification;
-window.confirmAction = confirmAction;
+window.debounce = debounce;
