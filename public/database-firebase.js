@@ -169,6 +169,35 @@ class DatabaseManager {
     }
   }
 
+  // ----------- PROYECCIONES -----------  
+  async getProjectionForMonth(month) {
+    try {
+      const cuotas = await this.getCuotas();
+      const registros = await this.getRegistros();
+      const proyeccion = cuotas
+        .filter(c => c.fecha_vencimiento?.substring(0, 7) === month)
+        .map(c => {
+          const registro = registros.find(r => r.id === c.registro_id);
+          return { ...c, registro };
+        })
+        .filter(p => p.registro);
+      return proyeccion;
+    } catch (error) {
+      console.error('❌ Error obteniendo proyección para el mes:', error);
+      return [];
+    }
+  }
+
+  async getProjectionByRegistroId(registroId) {
+    try {
+      const cuotas = await this.getCuotasByRegistroId(registroId);
+      return cuotas;
+    } catch (error) {
+      console.error('❌ Error obteniendo proyección por registro:', error);
+      return [];
+    }
+  }
+
   // ----------- ESTADÍSTICAS Y REPORTES -----------
   async getEstadisticasMes(month) {
     try {
