@@ -5,16 +5,13 @@ console.log('🔥 Iniciando carga de Firebase...');
 // Función para esperar a que Firebase esté disponible
 function waitForFirebase() {
     return new Promise((resolve) => {
-        if (window.firebase) {
+        if (window.firebase && window.firebase.db) {
             resolve();
         } else {
-            window.addEventListener('firebaseReady', resolve, { once: true });
+            window.addEventListener('firebaseReady', resolve);
         }
     });
 }
-
-// Inicialización de la base de datos
-let database = null;
 
 // Clase para manejar la base de datos
 class DatabaseManager {
@@ -30,12 +27,13 @@ class DatabaseManager {
         await waitForFirebase();
         
         try {
-            this.db = window.firebase.firestore.getFirestore();
-            this.storage = window.firebase.storage.getStorage();
+            this.db = window.firebase.db;
+            this.storage = window.firebase.storage;
             this.initialized = true;
             console.log('✅ DatabaseManager inicializado correctamente');
         } catch (error) {
             console.error('❌ Error inicializando DatabaseManager:', error);
+            throw error;
         }
     }
 
@@ -45,8 +43,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) return [];
             
-            const registrosRef = window.firebase.firestore.collection(this.db, 'registros');
-            const snapshot = await window.firebase.firestore.getDocs(registrosRef);
+            const registrosRef = window.firebase.collection('registros');
+            const snapshot = await window.firebase.getDocs(registrosRef);
             return snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -62,8 +60,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const registrosRef = window.firebase.firestore.collection(this.db, 'registros');
-            const docRef = await window.firebase.firestore.addDoc(registrosRef, {
+            const registrosRef = window.firebase.collection('registros');
+            const docRef = await window.firebase.addDoc(registrosRef, {
                 ...registroData,
                 fecha_registro: new Date().toISOString().split('T')[0]
             });
@@ -79,8 +77,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const registroRef = window.firebase.firestore.doc(this.db, 'registros', registroId);
-            await window.firebase.firestore.updateDoc(registroRef, updateData);
+            const registroRef = window.firebase.doc('registros', registroId);
+            await window.firebase.updateDoc(registroRef, updateData);
             return true;
         } catch (error) {
             console.error('Error actualizando registro:', error);
@@ -93,19 +91,19 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const registroRef = window.firebase.firestore.doc(this.db, 'registros', registroId);
-            await window.firebase.firestore.deleteDoc(registroRef);
+            const registroRef = window.firebase.doc('registros', registroId);
+            await window.firebase.deleteDoc(registroRef);
             
             // También eliminar cuotas asociadas
-            const cuotasRef = window.firebase.firestore.collection(this.db, 'cuotas');
-            const cuotasQuery = window.firebase.firestore.query(
+            const cuotasRef = window.firebase.collection('cuotas');
+            const cuotasQuery = window.firebase.query(
                 cuotasRef, 
-                window.firebase.firestore.where('registro_id', '==', registroId)
+                window.firebase.where('registro_id', '==', registroId)
             );
-            const cuotasSnapshot = await window.firebase.firestore.getDocs(cuotasQuery);
+            const cuotasSnapshot = await window.firebase.getDocs(cuotasQuery);
             
             const deletePromises = cuotasSnapshot.docs.map(cuotaDoc => 
-                window.firebase.firestore.deleteDoc(window.firebase.firestore.doc(this.db, 'cuotas', cuotaDoc.id))
+                window.firebase.deleteDoc(window.firebase.doc('cuotas', cuotaDoc.id))
             );
             await Promise.all(deletePromises);
             
@@ -151,8 +149,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) return [];
             
-            const cuotasRef = window.firebase.firestore.collection(this.db, 'cuotas');
-            const snapshot = await window.firebase.firestore.getDocs(cuotasRef);
+            const cuotasRef = window.firebase.collection('cuotas');
+            const snapshot = await window.firebase.getDocs(cuotasRef);
             return snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -168,8 +166,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) return null;
             
-            const cuotaRef = window.firebase.firestore.doc(this.db, 'cuotas', cuotaId);
-            const cuotaDoc = await window.firebase.firestore.getDoc(cuotaRef);
+            const cuotaRef = window.firebase.doc('cuotas', cuotaId);
+            const cuotaDoc = await window.firebase.getDoc(cuotaRef);
             if (cuotaDoc.exists()) {
                 return { id: cuotaDoc.id, ...cuotaDoc.data() };
             }
@@ -185,8 +183,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const cuotasRef = window.firebase.firestore.collection(this.db, 'cuotas');
-            const docRef = await window.firebase.firestore.addDoc(cuotasRef, cuotaData);
+            const cuotasRef = window.firebase.collection('cuotas');
+            const docRef = await window.firebase.addDoc(cuotasRef, cuotaData);
             return { id: docRef.id, ...cuotaData };
         } catch (error) {
             console.error('Error agregando cuota:', error);
@@ -199,8 +197,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const cuotaRef = window.firebase.firestore.doc(this.db, 'cuotas', cuotaId);
-            await window.firebase.firestore.updateDoc(cuotaRef, updateData);
+            const cuotaRef = window.firebase.doc('cuotas', cuotaId);
+            await window.firebase.updateDoc(cuotaRef, updateData);
             return true;
         } catch (error) {
             console.error('Error actualizando cuota:', error);
@@ -213,13 +211,13 @@ class DatabaseManager {
             await this.init();
             if (!this.db) return [];
             
-            const cuotasRef = window.firebase.firestore.collection(this.db, 'cuotas');
-            const cuotasQuery = window.firebase.firestore.query(
+            const cuotasRef = window.firebase.collection('cuotas');
+            const cuotasQuery = window.firebase.query(
                 cuotasRef, 
-                window.firebase.firestore.where('registro_id', '==', registroId),
-                window.firebase.firestore.orderBy('numero')
+                window.firebase.where('registro_id', '==', registroId),
+                window.firebase.orderBy('numero')
             );
-            const snapshot = await window.firebase.firestore.getDocs(cuotasQuery);
+            const snapshot = await window.firebase.getDocs(cuotasQuery);
             return snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -455,12 +453,12 @@ class DatabaseManager {
             await this.init();
             if (!this.db) return [];
             
-            const vouchersRef = window.firebase.firestore.collection(this.db, 'vouchers');
-            const vouchersQuery = window.firebase.firestore.query(
+            const vouchersRef = window.firebase.collection('vouchers');
+            const vouchersQuery = window.firebase.query(
                 vouchersRef, 
-                window.firebase.firestore.where('cuota_id', '==', cuotaId)
+                window.firebase.where('cuota_id', '==', cuotaId)
             );
-            const snapshot = await window.firebase.firestore.getDocs(vouchersQuery);
+            const snapshot = await window.firebase.getDocs(vouchersQuery);
             return snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -476,12 +474,12 @@ class DatabaseManager {
             await this.init();
             if (!this.db) return [];
             
-            const boletasRef = window.firebase.firestore.collection(this.db, 'boletas');
-            const boletasQuery = window.firebase.firestore.query(
+            const boletasRef = window.firebase.collection('boletas');
+            const boletasQuery = window.firebase.query(
                 boletasRef, 
-                window.firebase.firestore.where('cuota_id', '==', cuotaId)
+                window.firebase.where('cuota_id', '==', cuotaId)
             );
-            const snapshot = await window.firebase.firestore.getDocs(boletasQuery);
+            const snapshot = await window.firebase.getDocs(boletasQuery);
             return snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -497,8 +495,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const vouchersRef = window.firebase.firestore.collection(this.db, 'vouchers');
-            const docRef = await window.firebase.firestore.addDoc(vouchersRef, voucherData);
+            const vouchersRef = window.firebase.collection('vouchers');
+            const docRef = await window.firebase.addDoc(vouchersRef, voucherData);
             return { id: docRef.id, ...voucherData };
         } catch (error) {
             console.error('Error agregando voucher:', error);
@@ -511,8 +509,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const boletasRef = window.firebase.firestore.collection(this.db, 'boletas');
-            const docRef = await window.firebase.firestore.addDoc(boletasRef, boletaData);
+            const boletasRef = window.firebase.collection('boletas');
+            const docRef = await window.firebase.addDoc(boletasRef, boletaData);
             return { id: docRef.id, ...boletaData };
         } catch (error) {
             console.error('Error agregando boleta:', error);
@@ -525,8 +523,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const voucherRef = window.firebase.firestore.doc(this.db, 'vouchers', voucherId);
-            await window.firebase.firestore.deleteDoc(voucherRef);
+            const voucherRef = window.firebase.doc('vouchers', voucherId);
+            await window.firebase.deleteDoc(voucherRef);
             return true;
         } catch (error) {
             console.error('Error eliminando voucher:', error);
@@ -539,8 +537,8 @@ class DatabaseManager {
             await this.init();
             if (!this.db) throw new Error('Base de datos no inicializada');
             
-            const boletaRef = window.firebase.firestore.doc(this.db, 'boletas', boletaId);
-            await window.firebase.firestore.deleteDoc(boletaRef);
+            const boletaRef = window.firebase.doc('boletas', boletaId);
+            await window.firebase.deleteDoc(boletaRef);
             return true;
         } catch (error) {
             console.error('Error eliminando boleta:', error);
@@ -552,7 +550,7 @@ class DatabaseManager {
 // Inicializar la base de datos cuando Firebase esté listo
 async function initDatabase() {
     await waitForFirebase();
-    database = new DatabaseManager();
+    const database = new DatabaseManager();
     await database.init();
     
     // Hacer disponible globalmente
@@ -567,4 +565,4 @@ async function initDatabase() {
 initDatabase();
 
 // Exportación por defecto
-export default database;
+export default window.database;
