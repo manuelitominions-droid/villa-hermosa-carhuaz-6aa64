@@ -15,7 +15,7 @@ class AuthManager {
     }
 
     login(username, password) {
-        const user = db.getUsuarioByCredentials(username, password);
+        const user = database.getUsuarioByCredentials(username, password);
         if (user) {
             this.currentUser = user;
             sessionStorage.setItem('villa_current_user', JSON.stringify(user));
@@ -81,7 +81,6 @@ class AuthManager {
             }
 
             // Mostrar sección de inicio por defecto
-            // Llamar showSection sólo si está disponible (puede definirse en app.js que se carga después)
             if (typeof showSection === 'function') {
                 showSection('inicio');
             }
@@ -99,14 +98,14 @@ class AuthManager {
         }
 
         try {
-            const usuarios = db.getUsuarios();
+            const usuarios = database.getUsuarios();
             const existingUser = usuarios.find(u => u.username === userData.username);
             
             if (existingUser) {
                 return { success: false, message: 'El usuario ya existe' };
             }
 
-            const newUser = db.addUsuario(userData);
+            const newUser = database.addUsuario(userData);
             return { success: true, user: newUser };
         } catch (error) {
             return { success: false, message: 'Error al crear el usuario' };
