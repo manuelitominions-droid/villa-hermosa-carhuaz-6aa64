@@ -1,4 +1,4 @@
-// database-firebase.js — versión moderna con imports desde firebase-config.js
+// database-firebase.js — versión completa con métodos faltantes
 
 import { db, storage } from '../firebase-config.js';
 import {
@@ -61,10 +61,8 @@ class DatabaseManager {
 
   async deleteRegistro(id) {
     try {
-      // Eliminar el registro principal
       await deleteDoc(doc(this.db, 'registros', id));
 
-      // También eliminar cuotas asociadas
       const cuotasRef = collection(this.db, 'cuotas');
       const cuotasQuery = query(cuotasRef, where('registro_id', '==', id));
       const snapshot = await getDocs(cuotasQuery);
@@ -168,6 +166,117 @@ class DatabaseManager {
     } catch (error) {
       console.error('❌ Error obteniendo cuotas por registro:', error);
       return [];
+    }
+  }
+
+  // ----------- ESTADÍSTICAS Y REPORTES -----------
+  async getEstadisticasMes(month) {
+    try {
+      const cuotas = await this.getCuotas();
+      const cuotasMes = cuotas.filter(c => c.fecha_vencimiento?.substring(0, 7) === month && c.numero > 0);
+      const cuotasPagadas = cuotasMes.filter(c => c.pagado === 1);
+      const cuotasPendientes = cuotasMes.filter(c => c.pagado !== 1);
+
+      const cuotasAdelantadas = cuotas.filter(c => {
+        if (!c.fecha_pago || c.pagado !== 1) return false;
+        const fechaPago = c.fecha_pago.substring(0, 7);
+        const fechaVenc = c.fecha_vencimiento ? c.fecha_vencimiento.substring(0, 7) : '';
+        return fechaPago === month && fechaVenc > month;
+      });
+
+      return {
+        totalCuotas: cuotasMes.length,
+        numPagadas: cuotasPagadas.length,
+        noPagadas: cuotasPendientes.length,
+        porcentajePagado: cuotasMes.length ? (cuotasPagadas.length / cuotasMes.length) * 100 : 0,
+        porcentajeNoPagado: cuotasMes.length ? (cuotasPendientes.length / cuotasMes.length) * 100 : 0,
+        montoCuotasPagadas: cuotasPagadas.reduce((sum, c) => sum + (c.monto || 0), 0),
+        montoCuotasPendientes: cuotasPendientes.reduce((sum, c) => sum + (c.monto || 0), 0),
+        totalProyectado: cuotasMes.reduce((sum, c) => sum + (c.monto || 0), 0),
+        numAdelantadas: cuotasAdelantadas.length,
+        montoAdelantadas: cuotasAdelantadas.reduce((sum, c) => sum + (c.monto || 0), 0),
+        montoPagado: cuotasPagadas.reduce((sum, c) => sum + (c.monto || 0), 0) +
+                     cuotasAdelantadas.reduce((sum, c) => sum + (c.monto || 0), 0)
+      };
+    } catch (error) {
+      console.error('❌ Error obteniendo estadísticas:', error);
+      return {
+        totalCuotas: 0, numPagadas: 0, noPagadas: 0,
+        porcentajePagado: 0, porcentajeNoPagado: 0,
+        montoCuotasPagadas: 0, montoCuotasPendientes: 0,
+        totalProyectado: 0, numAdelantadas: 0, montoAdelantadas: 0, montoPagado: 0
+      };
+    }
+  }
+
+  async getReporteMensual(month) {
+    try {
+      const registros = await this.getRegistros();
+      const registrosMes = registros.filter(r => r.fecha_registro?.substring(0, 7) === month);
+      const totalClientes = registrosMes.length;
+      const totalCuotas = registrosMes.filter(r => r.forma_pago === 'cuotas').length;
+      const totalContado = registrosMes.filter(r => r.forma_pago === 'contado').length;
+      const inicialesCuotas = registrosMes.filter(r => r.forma_pago === 'cuotas').reduce((sum, r) => sum + (r.inicial || 0), 0);
+      const totalContadoMonto = registrosMes.filter(r => r.forma_pago === 'contado').reduce((sum, r) => sum + (r.monto_total || 0), 0);
+      const totalGeneral = inicialesCuotas + totalContadoMonto;
+
+      return { registros: registrosMes, totalClientes, totalCuotas, totalContado, inicialesCuotas, totalContadoMonto, totalGeneral };
+    } catch (error) {
+      console.error('❌ Error obteniendo reporte mensual:', error);
+      return { registros: [], totalClientes: 0, totalCuotas: 0, totalContado: 0, inicialesCuotas: 0, totalContadoMonto: 0, totalGeneral: 0 };
+    }
+  }
+
+  async getPendientesMes(month) {
+    try {
+      const cuotas = await this.getCuotas();
+      const registros = await this.getRegistros();
+      const pendientes = cuotas.filter(c => c.pagado !== 1 && c.fecha_vencimiento?.substring(0, 7) === month);
+
+      return pendientes.map(p => {
+        const registro = registros.find(r => r.id === p.registro_id);
+        return { ...p, registro };
+      }).filter(p => p.registro);
+    } catch (error) {
+      console.error('❌ Error obteniendo pendientes:', error);
+      return [];
+    }
+  }
+
+  async getAtrasados() {
+    try {
+      const cuotas = await this.getCuotas();
+      const registros = await this.getRegistros();
+      const hoy = new Date().toISOString().split('T')[0];
+      const atrasadosPorRegistro = {};
+
+      cuotas.forEach(c => {
+        if (c.pagado !== 1 && c.fecha_vencimiento && c.fecha_vencimiento < hoy) {
+          atrasadosPorRegistro[c.registro_id] = (atrasadosPorRegistro[c.registro_id] || 0) + 1;
+        }
+      });
+
+      return Object.entries(atrasadosPorRegistro).map(([registroId, cuotasPendientes]) => {
+        const registro = registros.find(r => r.id === registroId);
+        return { registro, cuotasPendientes };
+      }).filter(a => a.registro);
+    } catch (error) {
+      console.error('❌ Error obteniendo atrasados:', error);
+      return [];
+    }
+  }
+
+  async getLastCuotaMonth() {
+    try {
+      const cuotas = await this.getCuotas();
+      const fechas = cuotas
+        .filter(c => c.fecha_vencimiento && c.numero > 0)
+        .map(c => c.fecha_vencimiento.substring(0, 7))
+        .sort();
+      return fechas.length ? fechas[fechas.length - 1] : null;
+    } catch (error) {
+      console.error('❌ Error obteniendo última cuota:', error);
+      return null;
     }
   }
 
