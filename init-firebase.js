@@ -39,13 +39,13 @@ console.log('🔥 Cargando Firebase SDK...');
         console.log('✅ Firebase Firestore cargado');
         console.log('✅ Firebase Storage cargado');
 
-        // Crear objeto Firebase global simplificado
+        // Crear objeto Firebase global con todas las funciones necesarias
         window.firebase = {
             app: app,
             db: db,
             storage: storage,
-            // Funciones directas
-            collection: (collectionName) => collection(db, collectionName),
+            // Funciones de Firestore
+            collection: (name) => collection(db, name),
             doc: (collectionName, docId) => doc(db, collectionName, docId),
             addDoc: addDoc,
             updateDoc: updateDoc,
@@ -55,7 +55,11 @@ console.log('🔥 Cargando Firebase SDK...');
             query: query,
             where: where,
             orderBy: orderBy,
-            limit: limit
+            limit: limit,
+            // Funciones de Storage
+            ref: (path) => ref(storage, path),
+            uploadBytes: uploadBytes,
+            getDownloadURL: getDownloadURL
         };
 
         console.log('✅ Firebase inicializado correctamente y disponible globalmente');
@@ -66,13 +70,3 @@ console.log('🔥 Cargando Firebase SDK...');
     
     document.head.appendChild(firebaseScript);
 })();
-
-// Fallback para compatibilidad con código existente
-if (!window.firebase) {
-    console.log('⏳ Esperando carga de Firebase...');
-    
-    // Escuchar cuando Firebase esté listo
-    window.addEventListener('firebaseReady', function() {
-        console.log('🎉 Firebase listo para usar');
-    });
-}
