@@ -798,8 +798,8 @@ class Database {
 }
 
 // Instancia global de la base de datos
-const db = new Database();
-window.db = db;
+const database = new Database();
+window.database = database;
 
 // Exponer utilidades globales
 if (typeof window.cleanupOrphans === 'undefined') {
@@ -807,4 +807,5 @@ if (typeof window.cleanupOrphans === 'undefined') {
 }
 if (typeof window.recalcRegistroEstado === 'undefined') {
     window.recalcRegistroEstado = function(registroId) { return db.recalcRegistroEstado(registroId); };
+
 }
