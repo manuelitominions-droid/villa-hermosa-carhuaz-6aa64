@@ -2,66 +2,41 @@ import { debounce } from './utils.js';
 
 // app.js - Lógica principal de la aplicación
 
-// Importar la instancia de base de datos usando importación por defecto
-import database from './database-firebase.js';
+// Variables globales
+let currentSection = 'inicio';
 
-// Hacer la instancia disponible globalmente como 'db'
-window.db = database;
-const db = database;
-
-// Helper seguro para obtener la instancia de auth (puede estar en window o en el scope del módulo auth.js)
+// Helper seguro para obtener la instancia de auth
 function getAuth() {
     return window.auth || (typeof auth !== 'undefined' ? auth : null);
 }
 
-// Helper: envuelve una promesa con timeout para evitar hangs
-function promiseWithTimeout(promise, ms, errMsg) {
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(errMsg || `Timed out after ${ms}ms`)), ms);
+// Función para esperar a que la base de datos esté lista
+function waitForDatabase() {
+    return new Promise((resolve) => {
+        const checkDatabase = () => {
+            if (window.database && typeof window.database.getRegistros === 'function') {
+                console.log('✅ Base de datos disponible');
+                resolve(window.database);
+            } else {
+                console.log('⏳ Esperando base de datos...');
+                setTimeout(checkDatabase, 100);
+            }
+        };
+        checkDatabase();
     });
-    return Promise.race([promise.finally(() => clearTimeout(timeoutId)), timeoutPromise]);
 }
-
-// Subir archivo con timeout por tipo (voucher/boleta)
-function uploadWithTimeout(file, cuotaId, tipo, timeoutMs = 30000) {
-    return promiseWithTimeout(new Promise((resolve, reject) => {
-        handleFileUpload(file, cuotaId, tipo).then(resolve).catch(reject);
-    }), timeoutMs, `Upload ${file.name} timed out after ${timeoutMs}ms`);
-}
-
-// Subir con reintentos y backoff exponencial
-function uploadWithRetry(file, cuotaId, tipo, options = {}) {
-    const { retries = 2, timeoutMs = 45000, backoffBase = 800 } = options;
-
-    const attempt = (n) => {
-        return uploadWithTimeout(file, cuotaId, tipo, timeoutMs).then(res => ({ status: 'fulfilled', fileName: file.name, res, tipo }))
-            .catch(err => {
-                if (n <= 0) return { status: 'rejected', fileName: file.name, err, tipo };
-                const delay = backoffBase * Math.pow(2, (options.retries - n));
-                console.warn(`Upload failed for ${file.name}. Retrying in ${delay}ms... (${n} retries left)`);
-                return new Promise(resolve => setTimeout(resolve, delay)).then(() => attempt(n - 1));
-            });
-    };
-
-    return attempt(retries);
-}
-
-// Variables globales
-let currentSection = 'inicio';
 
 // Inicialización de la aplicación
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Inicializando aplicación...');
     
     // Verificar si hay usuario logueado
-    // Usar getAuth() para obtener la instancia de auth de forma segura
     const _auth = getAuth();
     if (_auth && typeof _auth.updateUI === 'function') {
         _auth.updateUI();
     }
     
-    // Si está logueado, mostrar la sección de inicio (showSection puede estar definido luego)
+    // Si está logueado, mostrar la sección de inicio
     if (_auth && typeof _auth.isLoggedIn === 'function' && _auth.isLoggedIn()) {
         if (typeof showSection === 'function') showSection('inicio');
     }
@@ -82,8 +57,7 @@ function showSection(sectionName) {
     if (targetSection) {
         targetSection.classList.remove('hidden');
         currentSection = sectionName;
-        // Mantener una referencia global para otros scripts que no son módulos
-        try { window.currentSection = currentSection; } catch (e) { /* ignore */ }
+        window.currentSection = currentSection;
         
         // Cargar contenido específico de la sección
         loadSectionContent(sectionName);
@@ -153,7 +127,6 @@ async function loadSectionContent(sectionName) {
 // Contenido de la sección Inicio
 function loadInicioContent() {
     // El contenido de inicio ya está en el HTML
-    // Solo necesitamos limpiar los resultados de búsqueda
     const searchResults = document.getElementById('searchResults');
     if (searchResults) {
         searchResults.innerHTML = '';
@@ -178,6 +151,9 @@ async function handleSearch(event) {
 
         console.log('🔍 Buscar registros con:', { manzana, lote, query });
 
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
+        
         const searchResult = await db.searchRegistros({ manzana, lote, query });
         const resultsContainer = document.getElementById('searchResults');
 
@@ -233,6 +209,10 @@ async function handleSearch(event) {
 async function loadClientesContent() {
     try {
         console.log('🔄 Cargando clientes...');
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
+        
         const registros = await db.getRegistros();
         const sortedRegistros = registros.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
         
@@ -269,6 +249,9 @@ const filterClientes = debounce(async function() {
         if (!searchInput) return;
         
         const query = searchInput.value.trim().toLowerCase();
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const registros = await db.getRegistros();
         
         let filteredRegistros = registros;
@@ -300,11 +283,13 @@ const filterClientes = debounce(async function() {
 // Contenido de la sección Proyección
 async function loadProyeccionContent() {
     try {
-        // Proyección: opción de seleccionar mes y ver timeline hasta última cuota
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
+        
         const nextMonth = getNextMonth();
         const defaultEnd = (await db.getLastCuotaMonth()) || nextMonth;
 
-        // Inicializar estado de vista de proyección (se usará para exportar lo visible)
+        // Inicializar estado de vista de proyección
         window._currentProjectionView = { mode: 'single', month: nextMonth, start: null, end: null };
 
         const proyeccionContent = document.getElementById('proyeccionContent');
@@ -355,6 +340,9 @@ async function showProjectionSingle() {
         
         // marcar vista actual
         window._currentProjectionView = { mode: 'single', month: mes, start: null, end: null };
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const proj = await db.getProjectionForMonth(mes);
 
         // Vista simple: solo dos cuadros como en la versión original
@@ -389,7 +377,11 @@ async function showProjectionSingle() {
 async function showProjectionTimeline() {
     try {
         const start = getNextMonth();
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const end = (await db.getLastCuotaMonth()) || start;
+        
         // marcar vista timeline
         window._currentProjectionView = { mode: 'timeline', month: null, start, end };
         const timeline = await db.getProjectionTimeline(start, end);
@@ -439,7 +431,7 @@ async function showProjectionTimeline() {
     }
 }
 
-// Exportar la proyección visible (mes seleccionado) a PDF — usa exportReporteMensualPDF como base
+// Exportar la proyección visible (mes seleccionado) a PDF
 function exportProjectionPDF() {
     try {
         const view = window._currentProjectionView || { mode: 'single' };
@@ -463,7 +455,7 @@ function exportProjectionPDF() {
     }
 }
 
-// Mostrar proyección para un rango arbitrario (start..end). Permite ver proyecciones pasadas.
+// Mostrar proyección para un rango arbitrario
 async function showProjectionRange(startMonth, endMonth) {
     try {
         if (!startMonth || !endMonth) return showNotification('Selecciona mes de inicio y fin', 'error');
@@ -475,6 +467,9 @@ async function showProjectionRange(startMonth, endMonth) {
         // marcar vista rango
         window._currentProjectionView = { mode: 'range', month: null, start: startMonth, end: endMonth };
 
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
+        
         // Obtener timeline para el rango
         const timeline = await db.getProjectionTimeline(startMonth, endMonth);
         const proyeccionResult = document.getElementById('proyeccionResult');
@@ -521,11 +516,15 @@ async function showProjectionRange(startMonth, endMonth) {
     }
 }
 
-// Exportar timeline completo (desde nextMonth hasta last cuota month)
+// Exportar timeline completo
 async function exportProjectionTimeline() {
     try {
         const start = getNextMonth();
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const end = (await db.getLastCuotaMonth()) || start;
+        
         if (typeof exportProjectionTimelinePDF === 'function') {
             exportProjectionTimelinePDF(start, end);
         } else {
@@ -537,11 +536,14 @@ async function exportProjectionTimeline() {
     }
 }
 
-// ACTUALIZADO: Contenido de la sección Estadísticas con nueva estructura
+// Contenido de la sección Estadísticas
 async function loadEstadisticasContent() {
     try {
         const currentMonth = getCurrentMonth();
         const monthName = getMonthName(currentMonth);
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const stats = await db.getEstadisticasMes(currentMonth);
         
         // Verificar que stats tiene las propiedades necesarias
@@ -632,6 +634,9 @@ async function loadPendientesContent() {
     try {
         const currentMonth = getCurrentMonth();
         const monthName = getMonthName(currentMonth);
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const pendientes = await db.getPendientesMes(currentMonth);
         
         let pendientesHTML = '';
@@ -701,6 +706,8 @@ async function loadPendientesContent() {
 // Contenido de la sección Atrasados
 async function loadAtrasadosContent() {
     try {
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const atrasados = await db.getAtrasados();
         
         let atrasadosHTML = '';
@@ -790,6 +797,9 @@ async function updateReporteMensual() {
         if (!reporteMonth) return;
         
         const selectedMonth = reporteMonth.value;
+        
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
         const reporte = await db.getReporteMensual(selectedMonth);
         const monthName = getMonthName(selectedMonth);
         
@@ -960,24 +970,27 @@ async function handleNewRegistro(event) {
         numero_cuotas: parseInt(formData.get('numero_cuotas')) || 1
     };
     
-    // Validar que no exista la manzana y lote
-    const registros = await db.getRegistros();
-    const existe = registros.find(r => 
-        r.manzana.toUpperCase() === registroData.manzana.toUpperCase() && 
-        r.lote.toUpperCase() === registroData.lote.toUpperCase()
-    );
-    
-    if (existe) {
-        showNotification('Ya existe un registro con esa manzana y lote', 'error');
-        return;
-    }
-    
-    // Ajustar datos según forma de pago
-    if (registroData.forma_pago === 'contado') {
-        registroData.inicial = 0;
-    }
-    
     try {
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
+        
+        // Validar que no exista la manzana y lote
+        const registros = await db.getRegistros();
+        const existe = registros.find(r => 
+            r.manzana.toUpperCase() === registroData.manzana.toUpperCase() && 
+            r.lote.toUpperCase() === registroData.lote.toUpperCase()
+        );
+        
+        if (existe) {
+            showNotification('Ya existe un registro con esa manzana y lote', 'error');
+            return;
+        }
+        
+        // Ajustar datos según forma de pago
+        if (registroData.forma_pago === 'contado') {
+            registroData.inicial = 0;
+        }
+        
         // Crear registro
         const nuevoRegistro = await db.addRegistro(registroData);
         
@@ -1046,6 +1059,9 @@ async function deleteRegistro(registroId) {
     }
     
     try {
+        // Esperar a que la base de datos esté disponible
+        const db = await waitForDatabase();
+        
         await db.deleteRegistro(registroId);
         showNotification('Registro eliminado exitosamente', 'success');
         loadSectionContent(currentSection);
