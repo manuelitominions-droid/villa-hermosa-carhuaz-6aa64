@@ -39,13 +39,12 @@ console.log('🔥 Cargando Firebase SDK...');
         console.log('✅ Firebase Firestore cargado');
         console.log('✅ Firebase Storage cargado');
 
-        // Crear objeto Firebase compatible con versión anterior
+        // Crear objeto Firebase global simplificado
         window.firebase = {
             app: app,
             db: db,
             storage: storage,
-            firestore: () => db,
-            getFirestore: () => db,
+            // Funciones directas
             collection: (collectionName) => collection(db, collectionName),
             doc: (collectionName, docId) => doc(db, collectionName, docId),
             addDoc: addDoc,
@@ -56,10 +55,7 @@ console.log('🔥 Cargando Firebase SDK...');
             query: query,
             where: where,
             orderBy: orderBy,
-            limit: limit,
-            ref: (path) => ref(storage, path),
-            uploadBytes: uploadBytes,
-            getDownloadURL: getDownloadURL
+            limit: limit
         };
 
         console.log('✅ Firebase inicializado correctamente y disponible globalmente');
