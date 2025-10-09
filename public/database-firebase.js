@@ -26,6 +26,11 @@ class DatabaseManager {
         
         try {
             await waitForFirebase();
+            
+            if (!window.firebase || !window.firebase.db) {
+                throw new Error('Firebase no está disponible');
+            }
+            
             this.db = window.firebase.db;
             this.storage = window.firebase.storage;
             this.initialized = true;
@@ -42,7 +47,7 @@ class DatabaseManager {
     async getRegistros() {
         try {
             const success = await this.init();
-            if (!success || !this.db) return [];
+            if (!success || !this.initialized) return [];
             
             const registrosRef = window.firebase.collection('registros');
             const snapshot = await window.firebase.getDocs(registrosRef);
@@ -59,7 +64,7 @@ class DatabaseManager {
     async addRegistro(registroData) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const registrosRef = window.firebase.collection('registros');
             const docRef = await window.firebase.addDoc(registrosRef, {
@@ -76,7 +81,7 @@ class DatabaseManager {
     async updateRegistro(registroId, updateData) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const registroRef = window.firebase.doc('registros', registroId);
             await window.firebase.updateDoc(registroRef, updateData);
@@ -90,7 +95,7 @@ class DatabaseManager {
     async deleteRegistro(registroId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const registroRef = window.firebase.doc('registros', registroId);
             await window.firebase.deleteDoc(registroRef);
@@ -148,7 +153,7 @@ class DatabaseManager {
     async getCuotas() {
         try {
             const success = await this.init();
-            if (!success || !this.db) return [];
+            if (!success || !this.initialized) return [];
             
             const cuotasRef = window.firebase.collection('cuotas');
             const snapshot = await window.firebase.getDocs(cuotasRef);
@@ -165,7 +170,7 @@ class DatabaseManager {
     async getCuotaById(cuotaId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) return null;
+            if (!success || !this.initialized) return null;
             
             const cuotaRef = window.firebase.doc('cuotas', cuotaId);
             const cuotaDoc = await window.firebase.getDoc(cuotaRef);
@@ -182,7 +187,7 @@ class DatabaseManager {
     async addCuota(cuotaData) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const cuotasRef = window.firebase.collection('cuotas');
             const docRef = await window.firebase.addDoc(cuotasRef, cuotaData);
@@ -196,7 +201,7 @@ class DatabaseManager {
     async updateCuota(cuotaId, updateData) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const cuotaRef = window.firebase.doc('cuotas', cuotaId);
             await window.firebase.updateDoc(cuotaRef, updateData);
@@ -210,7 +215,7 @@ class DatabaseManager {
     async getCuotasByRegistroId(registroId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) return [];
+            if (!success || !this.initialized) return [];
             
             const cuotasRef = window.firebase.collection('cuotas');
             const cuotasQuery = window.firebase.query(
@@ -452,7 +457,7 @@ class DatabaseManager {
     async getVouchersByCuotaId(cuotaId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) return [];
+            if (!success || !this.initialized) return [];
             
             const vouchersRef = window.firebase.collection('vouchers');
             const vouchersQuery = window.firebase.query(
@@ -473,7 +478,7 @@ class DatabaseManager {
     async getBoletasByCuotaId(cuotaId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) return [];
+            if (!success || !this.initialized) return [];
             
             const boletasRef = window.firebase.collection('boletas');
             const boletasQuery = window.firebase.query(
@@ -494,7 +499,7 @@ class DatabaseManager {
     async addVoucher(voucherData) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const vouchersRef = window.firebase.collection('vouchers');
             const docRef = await window.firebase.addDoc(vouchersRef, voucherData);
@@ -508,7 +513,7 @@ class DatabaseManager {
     async addBoleta(boletaData) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const boletasRef = window.firebase.collection('boletas');
             const docRef = await window.firebase.addDoc(boletasRef, boletaData);
@@ -522,7 +527,7 @@ class DatabaseManager {
     async deleteVoucher(voucherId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const voucherRef = window.firebase.doc('vouchers', voucherId);
             await window.firebase.deleteDoc(voucherRef);
@@ -536,7 +541,7 @@ class DatabaseManager {
     async deleteBoleta(boletaId) {
         try {
             const success = await this.init();
-            if (!success || !this.db) throw new Error('Base de datos no inicializada');
+            if (!success || !this.initialized) throw new Error('Base de datos no inicializada');
             
             const boletaRef = window.firebase.doc('boletas', boletaId);
             await window.firebase.deleteDoc(boletaRef);
@@ -556,12 +561,21 @@ async function initDatabase() {
         const success = await database.init();
         
         if (success) {
-            // Hacer disponible globalmente
+            // Hacer disponible globalmente - ASEGURAR QUE NO SEA UNDEFINED
             window.database = database;
-            console.log('✅ DatabaseManager inicializado y disponible globalmente');
             
-            // Disparar evento para notificar que la base de datos está lista
-            window.dispatchEvent(new CustomEvent('databaseReady'));
+            // Esperar un poco para asegurar que esté disponible
+            setTimeout(() => {
+                if (window.database && typeof window.database.getRegistros === 'function') {
+                    console.log('✅ DatabaseManager inicializado y disponible globalmente');
+                    // Disparar evento para notificar que la base de datos está lista
+                    window.dispatchEvent(new CustomEvent('databaseReady'));
+                } else {
+                    console.error('❌ DatabaseManager no está disponible correctamente');
+                    window.database = database; // Forzar asignación
+                }
+            }, 100);
+            
         } else {
             console.error('❌ No se pudo inicializar DatabaseManager');
             window.database = null;
