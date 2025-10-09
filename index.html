@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" type="image/png">
+  <title>Villa Hermosa de Carhuaz - Sistema de Gestión de Lotes</title>
+  <meta name="description" content="Sistema de Gestión de Lotes - Villa Hermosa de Carhuaz" />
+  <meta name="author" content="A&T" />
+
+  <meta property="og:title" content="Villa Hermosa de Carhuaz" />
+  <meta property="og:description" content="Sistema de Gestión de Lotes" />
+  <meta property="og:type" content="website" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome para iconos -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- jsPDF para reportes PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  
+  <!-- SheetJS para reportes Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    /* Estilos personalizados */
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .villa-green {
+      background-color: #22c55e;
+    }
+    
+    .villa-blue {
+      background-color: #3b82f6;
+    }
+    
+    .card-shadow {
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+    
+    .btn-villa {
+      background: linear-gradient(45deg, #22c55e, #16a34a);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-villa:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3);
+    }
+    
+    .logo-container {
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 80px;
+      overflow: visible;
+    }
+    
+    .logo-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transform: scale(2.5);
+      transform-origin: center;
+      display: block;
+    }
+    
+    .project-title {
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .villa-header-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .villa-header-bg::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+  background: url('./public/villa-hermoza.jpg') center/cover;
+      opacity: 0.1;
+      z-index: 0;
+    }
+
+    .villa-header-content {
+      position: relative;
+      z-index: 1;
+    }
+    /* Fondo para la sección de login: imagen realista local con overlay para legibilidad */
+    /* Reducida la opacidad del overlay para que la pantalla se vea más clara */
+    #loginSection {
+      background: linear-gradient(rgba(0,0,0,0.05), rgba(0,0,0,0.05)), url('./public/fondo_inicio.jpeg') center/cover no-repeat;
+      background-attachment: fixed;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50">
+  <!-- Header -->
+  <header class="villa-header-bg text-white shadow-lg">
+    <div class="villa-header-content container mx-auto px-4 py-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <div class="logo-container">
+            <img src="./public/villa-hermoza.jpg" alt="A&T Logo" class="rounded-lg">
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold">Villa Hermosa de Carhuaz</h1>
+            <p class="text-blue-100">Sistema de Gestión de Lotes</p>
+          </div>
+        </div>
+        <div id="userInfo" class="hidden">
+          <span id="currentUser" class="mr-4"></span>
+          <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg transition-colors">
+            <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav id="mainNav" class="bg-white shadow-md hidden">
+    <div class="container mx-auto px-4">
+      <div class="flex flex-wrap items-center justify-center py-4 space-x-2 md:space-x-6">
+        <button onclick="showSection('inicio')" class="nav-btn bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-home mr-1 md:mr-2"></i>Inicio
+        </button>
+        <button onclick="showSection('clientes')" class="nav-btn bg-green-500 hover:bg-green-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-users mr-1 md:mr-2"></i>Clientes
+        </button>
+        <button onclick="showSection('proyeccion')" class="nav-btn bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-chart-line mr-1 md:mr-2"></i>Proyección
+        </button>
+        <button onclick="showSection('estadisticas')" class="nav-btn bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-chart-bar mr-1 md:mr-2"></i>Estadísticas
+        </button>
+        <button onclick="showSection('reporte-mensual')" class="nav-btn bg-teal-500 hover:bg-teal-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-calendar mr-1 md:mr-2"></i>Reporte
+        </button>
+        <button onclick="showSection('pendientes')" class="nav-btn bg-red-500 hover:bg-red-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-exclamation-circle mr-1 md:mr-2"></i>Pendientes
+        </button>
+        <button onclick="showSection('atrasados')" class="nav-btn bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base">
+          <i class="fas fa-clock mr-1 md:mr-2"></i>Atrasados
+        </button>
+        <button id="crearUsuarioBtn" onclick="showSection('crear-usuario')" class="nav-btn bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg transition-colors text-sm md:text-base hidden">
+          <i class="fas fa-user-plus mr-1 md:mr-2"></i>Usuario
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Login Section -->
+  <section id="loginSection" class="min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-2xl card-shadow max-w-md w-full mx-4">
+        <div class="text-center mb-8">
+        <div class="logo-container inline-block mb-4">
+          <img src="./public/villa-hermoza.jpg" alt="A&T Logo" class="rounded-lg">
+        </div>
+        <h2 class="text-2xl font-bold project-title">Villa Hermosa de Carhuaz</h2>
+        <p class="text-gray-600 mt-2">Sistema de Gestión de Lotes</p>
+      </div>
+      
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="mb-6">
+          <label class="block text-gray-700 text-sm font-bold mb-2">
+            <i class="fas fa-user mr-2"></i>Usuario
+          </label>
+          <input type="text" id="username" required 
+                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 transition-colors">
+        </div>
+        
+        <div class="mb-6">
+          <label class="block text-gray-700 text-sm font-bold mb-2">
+            <i class="fas fa-lock mr-2"></i>Contraseña
+          </label>
+          <input type="password" id="password" required 
+                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 transition-colors">
+        </div>
+        
+        <button type="submit" class="w-full btn-villa text-white font-bold py-3 px-4 rounded-lg">
+          <i class="fas fa-sign-in-alt mr-2"></i>Ingresar
+        </button>
+      </form>
+      
+  <div id="loginError" class="mt-4 text-red-500 text-center hidden"></div>
+      
+  <!-- Contenedor para credenciales de demo (se rellenará solo en localhost) -->
+  <div id="demoCredsContainer" class="mt-4 text-center text-sm text-gray-600"></div>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main id="mainContent" class="container mx-auto px-4 py-8 hidden">
+    
+    <!-- Inicio Section -->
+    <section id="inicioSection" class="section">
+      <div class="bg-white rounded-2xl card-shadow p-6 mb-8">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-search mr-3 text-blue-500"></i>Búsqueda de Registros
+        </h2>
+        
+        <form id="searchForm" onsubmit="handleSearch(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Manzana</label>
+            <input type="text" id="searchManzana" placeholder="Ej: A" 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Lote</label>
+            <input type="text" id="searchLote" placeholder="Ej: 1" 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">DNI o Nombre (opcional)</label>
+            <input type="text" id="searchQuery" placeholder="Buscar por DNI o nombre" 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+          </div>
+          <div class="flex items-end">
+            <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
+              <i class="fas fa-search mr-2"></i>Buscar
+            </button>
+          </div>
+        </form>
+        
+        <div class="flex flex-wrap gap-4 mb-6">
+          <button id="nuevoRegistroBtn" onclick="showNewRegistroModal()" class="btn-villa text-white px-6 py-3 rounded-lg font-semibold hidden">
+            <i class="fas fa-plus mr-2"></i>Nuevo Registro
+          </button>
+          <button onclick="showSection('clientes')" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+            <i class="fas fa-users mr-2"></i>Ver Todos los Clientes
+          </button>
+        </div>
+        
+        <div id="searchResults"></div>
+      </div>
+    </section>
+
+    <!-- Clientes Section -->
+    <section id="clientesSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-users mr-3 text-green-500"></i>Clientes Registrados
+        </h2>
+        
+        <div class="mb-6">
+          <input type="text" id="clientesSearch" placeholder="Buscar por cualquier nombre o DNI" 
+                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-green-500"
+                 oninput="filterClientes()">
+        </div>
+        
+        <div id="clientesCount" class="mb-4 text-lg font-semibold text-gray-700"></div>
+        <div id="clientesTable"></div>
+      </div>
+    </section>
+
+    <!-- Other sections -->
+    <section id="proyeccionSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-chart-line mr-3 text-purple-500"></i>Proyección de Ingresos
+        </h2>
+        <div id="proyeccionContent"></div>
+      </div>
+    </section>
+
+    <section id="estadisticasSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-chart-bar mr-3 text-indigo-500"></i>Estadísticas de Pagos
+        </h2>
+        <div id="estadisticasContent"></div>
+      </div>
+    </section>
+
+    <section id="pendientesSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-exclamation-circle mr-3 text-red-500"></i>Clientes con Cuotas Pendientes
+        </h2>
+        <div id="pendientesContent"></div>
+      </div>
+    </section>
+
+    <section id="atrasadosSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-clock mr-3 text-orange-500"></i>Clientes Atrasados
+        </h2>
+        <div id="atrasadosContent"></div>
+      </div>
+    </section>
+
+    <section id="reporte-mensualSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-calendar mr-3 text-teal-500"></i>Reporte Mensual
+        </h2>
+        <div id="reporteMensualContent"></div>
+      </div>
+    </section>
+
+    <section id="crear-usuarioSection" class="section hidden">
+      <div class="bg-white rounded-2xl card-shadow p-6">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">
+          <i class="fas fa-user-plus mr-3 text-gray-500"></i>Crear Usuario
+        </h2>
+        <div id="crearUsuarioContent"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modals -->
+  <div id="modalContainer"></div>
+
+<!-- Scripts Firebase -->
+<!-- Inicializar Firebase PRIMERO -->
+<script src="./init-firebase.js"></script>
+
+<!-- Scripts de la aplicación -->
+<script type="module" src="./public/utils.js"></script>
+<script type="module" src="./public/database-firebase.js"></script>
+<script type="module" src="./public/auth.js"></script>
+<script type="module" src="./public/components.js"></script>
+<script type="module" src="./public/reports.js"></script>
+<script type="module" src="./public/app.js"></script>
+
+<script>
+  // Mostrar credenciales de prueba SOLO en localhost
+  (function() {
+    try {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        const container = document.getElementById('demoCredsContainer');
+        if (container) {
+          container.innerHTML = '<p><strong>Usuario de prueba:</strong> villahermosa</p>' +
+                                '<p><strong>Contraseña:</strong> villa8956</p>';
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo renderizar credenciales de demo', e);
+    }
+  })();
+</script>
+
+<script>
+  // Limpieza ligera al inicio: eliminar overlays o contenedores de modal residuales
+  (function(){
+    try {
+      // Asegurar que modalContainer esté vacío
+      const mc = document.getElementById('modalContainer');
+      if (mc) mc.innerHTML = '';
+
+      // Quitar confirmModalContainer si quedó por error
+      const cm = document.getElementById('confirmModalContainer');
+      if (cm && cm.parentNode) cm.parentNode.removeChild(cm);
+
+      // Normalizar overlays oscuros que puedan haber quedado
+      const overlays = document.querySelectorAll('.fixed.bg-black');
+      overlays.forEach(o => { o.style.background = ''; o.style.opacity = ''; o.style.pointerEvents = ''; });
+    } catch (e) { console.warn('Startup cleanup failed', e); }
+  })();
+</script>
+
+<script>
+  // Limpieza adicional para overlays oscuros que puedan ser añadidos por módulos
+  (function(){
+    function removeDarkOverlays() {
+      try {
+        const all = Array.from(document.querySelectorAll('body *'));
+        all.forEach(el => {
+          try {
+            const style = window.getComputedStyle(el);
+            if (style.position === 'fixed' || style.position === 'absolute') {
+              const rect = el.getBoundingClientRect();
+              // Detectar overlays de pantalla completa
+              if (rect.top <= 1 && rect.left <= 1 && rect.width >= window.innerWidth - 2 && rect.height >= window.innerHeight - 2) {
+                // revisar color de fondo
+                const bg = style.backgroundColor || '';
+                if (bg && (bg.startsWith('rgba') || bg.startsWith('rgb') || bg.indexOf('#') === 0)) {
+                  // si el color es oscuro/semiópaco, removerlo
+                  if (bg.startsWith('rgba')) {
+                    const m = bg.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([0-9\.]+)\)/);
+                    if (m && parseFloat(m[4]) > 0.12) {
+                      if (el.id !== 'confirmModalContainer' && el.id !== 'modalContainer') el.parentNode && el.parentNode.removeChild(el);
+                    }
+                  } else if (bg.startsWith('rgb')) {
+                    // rgb sin alpha -> muy probablemente opaco; si tiene fondo negro o muy oscuro, remover
+                    const m2 = bg.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                    if (m2) {
+                      const r = parseInt(m2[1]), g = parseInt(m2[2]), b = parseInt(m2[3]);
+                      const luminance = (0.2126*r + 0.7152*g + 0.0722*b)/255;
+                      if (luminance < 0.15) {
+                        el.parentNode && el.parentNode.removeChild(el);
+                      }
+                    }
+                  } else if (bg.indexOf('#') === 0) {
+                    // hex color
+                    const hex = bg.replace('#','');
+                    const bigint = parseInt(hex,16);
+                    const r = (bigint >> 16) & 255;
+                    const g = (bigint >> 8) & 255;
+                    const b = bigint & 255;
+                    const luminance = (0.2126*r + 0.7152*g + 0.0722*b)/255;
+                    if (luminance < 0.15) {
+                      el.parentNode && el.parentNode.removeChild(el);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (inner) { /* ignore individual element errors */ }
+        });
+      } catch (e) { console.warn('removeDarkOverlays failed', e); }
+    }
+
+    // Ejecutar repetidamente durante los primeros 5s para capturar overlays añadidos después de la carga
+    const intervalId = setInterval(removeDarkOverlays, 500);
+    setTimeout(() => clearInterval(intervalId), 5000);
+
+    // Exponer para llamadas manuales y para que otras pestañas puedan invocarla si es necesario
+    try { window.removeDarkOverlays = removeDarkOverlays; } catch(e){}
+
+    // Ejecutar al volver a la pestaña (focus) o cuando cambia la visibilidad
+    window.addEventListener('focus', () => { try { removeDarkOverlays(); } catch(e){} });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) try { removeDarkOverlays(); } catch(e){} });
+  })();
+</script>
+
+</body>
+
+</html>
