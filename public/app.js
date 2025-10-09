@@ -2,6 +2,13 @@ import { debounce } from './utils.js';
 
 // app.js - Lógica principal de la aplicación
 
+// Importar la instancia de base de datos
+import { database } from './database-firebase.js';
+
+// Hacer la instancia disponible globalmente como 'db'
+window.db = database;
+const db = database;
+
 // Helper seguro para obtener la instancia de auth (puede estar en window o en el scope del módulo auth.js)
 function getAuth() {
     return window.auth || (typeof auth !== 'undefined' ? auth : null);
@@ -96,28 +103,28 @@ function updateActiveNav(sectionName) {
 }
 
 // Cargar contenido específico de cada sección
-function loadSectionContent(sectionName) {
+async function loadSectionContent(sectionName) {
     switch (sectionName) {
         case 'inicio':
             loadInicioContent();
             break;
         case 'clientes':
-            loadClientesContent();
+            await loadClientesContent();
             break;
         case 'proyeccion':
-            loadProyeccionContent();
+            await loadProyeccionContent();
             break;
         case 'estadisticas':
-            loadEstadisticasContent();
+            await loadEstadisticasContent();
             break;
         case 'pendientes':
-            loadPendientesContent();
+            await loadPendientesContent();
             break;
         case 'atrasados':
-            loadAtrasadosContent();
+            await loadAtrasadosContent();
             break;
         case 'reporte-mensual':
-            loadReporteMensualContent();
+            await loadReporteMensualContent();
             break;
         case 'crear-usuario':
             loadCrearUsuarioContent();
@@ -130,10 +137,17 @@ function loadInicioContent() {
     // El contenido de inicio ya está en el HTML
     // Solo necesitamos limpiar los resultados de búsqueda
     document.getElementById('searchResults').innerHTML = '';
+    
+    // Mostrar el botón "Nuevo Registro" si el usuario tiene permisos
+    const _auth = getAuth();
+    const nuevoRegistroBtn = document.getElementById('nuevoRegistroBtn');
+    if (nuevoRegistroBtn && _auth && _auth.isAdmin && _auth.isAdmin()) {
+        nuevoRegistroBtn.classList.remove('hidden');
+    }
 }
 
 // Manejo de búsqueda
-function handleSearch(event) {
+async function handleSearch(event) {
     try {
         event.preventDefault();
 
@@ -143,7 +157,7 @@ function handleSearch(event) {
 
         console.log('Buscar registros con:', { manzana, lote, query });
 
-        const searchResult = db.searchRegistros({ manzana, lote, query });
+        const searchResult = await db.searchRegistros({ manzana, lote, query });
         const resultsContainer = document.getElementById('searchResults');
 
         if (searchResult.error) {
@@ -156,7 +170,7 @@ function handleSearch(event) {
             return;
         }
 
-        if (searchResult.results.length === 0) {
+        if (!searchResult.results || searchResult.results.length === 0) {
             console.info('searchRegistros no encontró resultados');
             let mensaje = "No se encontraron registros";
             if (manzana && lote) {
@@ -190,109 +204,129 @@ function handleSearch(event) {
 }
 
 // Contenido de la sección Clientes
-function loadClientesContent() {
-    const registros = db.getRegistros().sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
-    
-    document.getElementById('clientesCount').textContent = `Total de clientes: ${registros.length}`;
-    document.getElementById('clientesTable').innerHTML = createRegistrosTable(registros);
+async function loadClientesContent() {
+    try {
+        const registros = await db.getRegistros();
+        const sortedRegistros = registros.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
+        
+        document.getElementById('clientesCount').textContent = `Total de clientes: ${sortedRegistros.length}`;
+        document.getElementById('clientesTable').innerHTML = createRegistrosTable(sortedRegistros);
+    } catch (error) {
+        console.error('Error cargando clientes:', error);
+        document.getElementById('clientesCount').textContent = 'Error cargando clientes';
+        document.getElementById('clientesTable').innerHTML = '<div class="text-red-500">Error al cargar los datos</div>';
+    }
 }
 
 // Filtrar clientes
-const filterClientes = debounce(function() {
-    const query = document.getElementById('clientesSearch').value.trim().toLowerCase();
-    const registros = db.getRegistros();
-    
-    let filteredRegistros = registros;
-    if (query) {
-        filteredRegistros = registros.filter(r =>
-            r.nombre1.toLowerCase().includes(query) ||
-            (r.nombre2 && r.nombre2.toLowerCase().includes(query)) ||
-            r.dni1.includes(query) ||
-            (r.dni2 && r.dni2.includes(query))
-        );
+const filterClientes = debounce(async function() {
+    try {
+        const query = document.getElementById('clientesSearch').value.trim().toLowerCase();
+        const registros = await db.getRegistros();
+        
+        let filteredRegistros = registros;
+        if (query) {
+            filteredRegistros = registros.filter(r =>
+                (r.nombre1 && r.nombre1.toLowerCase().includes(query)) ||
+                (r.nombre2 && r.nombre2.toLowerCase().includes(query)) ||
+                (r.dni1 && r.dni1.includes(query)) ||
+                (r.dni2 && r.dni2.includes(query))
+            );
+        }
+        
+        filteredRegistros.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
+        
+        document.getElementById('clientesCount').textContent = `Total de clientes: ${filteredRegistros.length}`;
+        document.getElementById('clientesTable').innerHTML = createRegistrosTable(filteredRegistros);
+    } catch (error) {
+        console.error('Error filtrando clientes:', error);
     }
-    
-    filteredRegistros.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
-    
-    document.getElementById('clientesCount').textContent = `Total de clientes: ${filteredRegistros.length}`;
-    document.getElementById('clientesTable').innerHTML = createRegistrosTable(filteredRegistros);
 }, 300);
 
 // Contenido de la sección Proyección
-function loadProyeccionContent() {
-    // Proyección: opción de seleccionar mes y ver timeline hasta última cuota
-    const nextMonth = getNextMonth();
-    const defaultEnd = db.getLastCuotaMonth() || nextMonth;
+async function loadProyeccionContent() {
+    try {
+        // Proyección: opción de seleccionar mes y ver timeline hasta última cuota
+        const nextMonth = getNextMonth();
+        const defaultEnd = await db.getLastCuotaMonth() || nextMonth;
 
-    // Inicializar estado de vista de proyección (se usará para exportar lo visible)
-    window._currentProjectionView = { mode: 'single', month: nextMonth, start: null, end: null };
+        // Inicializar estado de vista de proyección (se usará para exportar lo visible)
+        window._currentProjectionView = { mode: 'single', month: nextMonth, start: null, end: null };
 
-    document.getElementById('proyeccionContent').innerHTML = `
-        <div class="space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-xl font-semibold text-gray-800">Proyección de Ingresos</h3>
+        document.getElementById('proyeccionContent').innerHTML = `
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xl font-semibold text-gray-800">Proyección de Ingresos</h3>
+                    <div class="flex items-center space-x-2">
+                        <input type="month" id="proyeccionMonth" value="${nextMonth}" class="px-3 py-2 border border-gray-300 rounded-lg">
+                        <button onclick="showProjectionSingle()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">Ver mes</button>
+                        <button onclick="showProjectionTimeline()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg">Ver proyección mes a mes</button>
+                        <button onclick="exportProjectionPDF()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">Exportar PDF</button>
+                    </div>
+                </div>
+
                 <div class="flex items-center space-x-2">
-                    <input type="month" id="proyeccionMonth" value="${nextMonth}" class="px-3 py-2 border border-gray-300 rounded-lg">
-                    <button onclick="showProjectionSingle()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">Ver mes</button>
-                    <button onclick="showProjectionTimeline()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg">Ver proyección mes a mes</button>
-                    <button onclick="exportProjectionPDF()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">Exportar PDF</button>
+                    <label class="text-sm">Ver rango histórico:</label>
+                    <input type="month" id="proyeccionStart" value="${defaultEnd}" class="px-3 py-2 border border-gray-300 rounded-lg">
+                    <input type="month" id="proyeccionEnd" value="${defaultEnd}" class="px-3 py-2 border border-gray-300 rounded-lg">
+                    <button onclick="showProjectionRange(document.getElementById('proyeccionStart').value, document.getElementById('proyeccionEnd').value)" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Ver rango</button>
                 </div>
-            </div>
 
-            <div class="flex items-center space-x-2">
-                <label class="text-sm">Ver rango histórico:</label>
-                <input type="month" id="proyeccionStart" value="${defaultEnd}" class="px-3 py-2 border border-gray-300 rounded-lg">
-                <input type="month" id="proyeccionEnd" value="${defaultEnd}" class="px-3 py-2 border border-gray-300 rounded-lg">
-                <button onclick="showProjectionRange(document.getElementById('proyeccionStart').value, document.getElementById('proyeccionEnd').value)" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Ver rango</button>
+                <div id="proyeccionResult"></div>
             </div>
-                </div>
-            </div>
+        `;
 
-            <div id="proyeccionResult"></div>
-        </div>
-    `;
-
-    // Mostrar valor inicial de la proyección para el mes por defecto
-    showProjectionSingle();
+        // Mostrar valor inicial de la proyección para el mes por defecto
+        await showProjectionSingle();
+    } catch (error) {
+        console.error('Error cargando proyección:', error);
+        document.getElementById('proyeccionContent').innerHTML = '<div class="text-red-500">Error al cargar proyección</div>';
+    }
 }
 
 // Mostrar proyección para un mes seleccionado
-function showProjectionSingle() {
-    const mes = document.getElementById('proyeccionMonth').value || getNextMonth();
-    // marcar vista actual
-    window._currentProjectionView = { mode: 'single', month: mes, start: null, end: null };
-    const proj = db.getProjectionForMonth(mes);
+async function showProjectionSingle() {
+    try {
+        const mes = document.getElementById('proyeccionMonth').value || getNextMonth();
+        // marcar vista actual
+        window._currentProjectionView = { mode: 'single', month: mes, start: null, end: null };
+        const proj = await db.getProjectionForMonth(mes);
 
-    // Vista simple: solo dos cuadros como en la versión original
-    const monto = proj.totalProjected || 0;
-    const cuotasCount = proj.count || 0;
+        // Vista simple: solo dos cuadros como en la versión original
+        const monto = proj.totalProjected || 0;
+        const cuotasCount = proj.count || 0;
 
-    document.getElementById('proyeccionResult').innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-indigo-50 p-6 rounded-lg">
-                <h4 class="text-lg font-semibold text-indigo-800 mb-2">Número de cuotas</h4>
-                <p class="text-3xl font-bold text-indigo-600">${cuotasCount}</p>
+        document.getElementById('proyeccionResult').innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-indigo-50 p-6 rounded-lg">
+                    <h4 class="text-lg font-semibold text-indigo-800 mb-2">Número de cuotas</h4>
+                    <p class="text-3xl font-bold text-indigo-600">${cuotasCount}</p>
+                </div>
+                <div class="bg-purple-50 p-6 rounded-lg">
+                    <h4 class="text-lg font-semibold text-purple-800 mb-2">Total proyectado</h4>
+                    <p class="text-3xl font-bold text-purple-600">${formatCurrency(monto)}</p>
+                </div>
             </div>
-            <div class="bg-purple-50 p-6 rounded-lg">
-                <h4 class="text-lg font-semibold text-purple-800 mb-2">Total proyectado</h4>
-                <p class="text-3xl font-bold text-purple-600">${formatCurrency(monto)}</p>
-            </div>
-        </div>
-    `;
+        `;
+    } catch (error) {
+        console.error('Error en showProjectionSingle:', error);
+        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error al cargar proyección</div>';
+    }
 }
 
 // Mostrar proyección timeline desde next month hasta last cuota month
-function showProjectionTimeline() {
-    const start = getNextMonth();
-    const end = db.getLastCuotaMonth() || start;
-    // marcar vista timeline
-    window._currentProjectionView = { mode: 'timeline', month: null, start, end };
-    const timeline = db.getProjectionTimeline(start, end);
+async function showProjectionTimeline() {
+    try {
+        const start = getNextMonth();
+        const end = await db.getLastCuotaMonth() || start;
+        // marcar vista timeline
+        window._currentProjectionView = { mode: 'timeline', month: null, start, end };
+        const timeline = await db.getProjectionTimeline(start, end);
 
-    if (!timeline || timeline.length === 0) {
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-sm text-gray-500">No hay cuotas para proyectar.</div>';
-        return;
-    }
+        if (!timeline || timeline.length === 0) {
+            document.getElementById('proyeccionResult').innerHTML = '<div class="text-sm text-gray-500">No hay cuotas para proyectar.</div>';
+            return;
+        }
 
         // Render a styled table: alternating rows, header highlight, right-aligned amounts
         const rows = timeline.map(t => `
@@ -322,6 +356,10 @@ function showProjectionTimeline() {
                 </div>
             </div>
         `;
+    } catch (error) {
+        console.error('Error en showProjectionTimeline:', error);
+        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error al cargar timeline</div>';
+    }
 }
 
 // Exportar la proyección visible (mes seleccionado) a PDF — usa exportReporteMensualPDF como base
@@ -334,7 +372,7 @@ function exportProjectionPDF() {
             if (typeof exportReporteMensualPDF === 'function') return exportReporteMensualPDF(mes);
         } else if (view.mode === 'timeline' || view.mode === 'range') {
             const start = view.start || document.getElementById('proyeccionStart')?.value || getNextMonth();
-            const end = view.end || document.getElementById('proyeccionEnd')?.value || db.getLastCuotaMonth() || start;
+            const end = view.end || document.getElementById('proyeccionEnd')?.value || getNextMonth();
             if (typeof exportProjectionTimelinePDF === 'function') return exportProjectionTimelinePDF(start, end);
         }
 
@@ -346,22 +384,23 @@ function exportProjectionPDF() {
 }
 
 // Mostrar proyección para un rango arbitrario (start..end). Permite ver proyecciones pasadas.
-function showProjectionRange(startMonth, endMonth) {
-    if (!startMonth || !endMonth) return showNotification('Selecciona mes de inicio y fin', 'error');
-    // Normalizar orden
-    if (startMonth > endMonth) {
-        const tmp = startMonth; startMonth = endMonth; endMonth = tmp;
-    }
+async function showProjectionRange(startMonth, endMonth) {
+    try {
+        if (!startMonth || !endMonth) return showNotification('Selecciona mes de inicio y fin', 'error');
+        // Normalizar orden
+        if (startMonth > endMonth) {
+            const tmp = startMonth; startMonth = endMonth; endMonth = tmp;
+        }
 
-    // marcar vista rango
-    window._currentProjectionView = { mode: 'range', month: null, start: startMonth, end: endMonth };
+        // marcar vista rango
+        window._currentProjectionView = { mode: 'range', month: null, start: startMonth, end: endMonth };
 
-    // Obtener timeline para el rango
-    const timeline = db.getProjectionTimeline(startMonth, endMonth);
-    if (!timeline || timeline.length === 0) {
-        document.getElementById('proyeccionResult').innerHTML = '<div class="text-sm text-gray-500">No hay datos en ese rango.</div>';
-        return;
-    }
+        // Obtener timeline para el rango
+        const timeline = await db.getProjectionTimeline(startMonth, endMonth);
+        if (!timeline || timeline.length === 0) {
+            document.getElementById('proyeccionResult').innerHTML = '<div class="text-sm text-gray-500">No hay datos en ese rango.</div>';
+            return;
+        }
 
         const rows = timeline.map(t => `
             <tr class="odd:bg-white even:bg-gray-50 hover:bg-gray-100">
@@ -390,13 +429,17 @@ function showProjectionRange(startMonth, endMonth) {
                 </div>
             </div>
         `;
+    } catch (error) {
+        console.error('Error en showProjectionRange:', error);
+        document.getElementById('proyeccionResult').innerHTML = '<div class="text-red-500">Error al cargar rango</div>';
+    }
 }
 
 // Exportar timeline completo (desde nextMonth hasta last cuota month)
-function exportProjectionTimeline() {
-    const start = getNextMonth();
-    const end = db.getLastCuotaMonth() || start;
+async function exportProjectionTimeline() {
     try {
+        const start = getNextMonth();
+        const end = await db.getLastCuotaMonth() || start;
         if (typeof exportProjectionTimelinePDF === 'function') {
             exportProjectionTimelinePDF(start, end);
         } else {
@@ -409,177 +452,193 @@ function exportProjectionTimeline() {
 }
 
 // ACTUALIZADO: Contenido de la sección Estadísticas con nueva estructura
-function loadEstadisticasContent() {
-    const currentMonth = getCurrentMonth();
-    const monthName = getMonthName(currentMonth);
-    const stats = db.getEstadisticasMes(currentMonth);
-    
-    document.getElementById('estadisticasContent').innerHTML = `
-        <div class="space-y-6">
-            <div class="flex items-start justify-between">
-                <h3 class="text-xl font-semibold text-gray-800">Estadísticas de ${monthName}</h3>
-                <div class="flex items-center space-x-3">
-                    <button onclick="exportEstadisticasPDF('${currentMonth}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
-                        <i class="fas fa-file-pdf mr-2"></i>Exportar PDF
-                    </button>
+async function loadEstadisticasContent() {
+    try {
+        const currentMonth = getCurrentMonth();
+        const monthName = getMonthName(currentMonth);
+        const stats = await db.getEstadisticasMes(currentMonth);
+        
+        document.getElementById('estadisticasContent').innerHTML = `
+            <div class="space-y-6">
+                <div class="flex items-start justify-between">
+                    <h3 class="text-xl font-semibold text-gray-800">Estadísticas de ${monthName}</h3>
+                    <div class="flex items-center space-x-3">
+                        <button onclick="exportEstadisticasPDF('${currentMonth}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-file-pdf mr-2"></i>Exportar PDF
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-blue-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-blue-800 mb-2">Total de Cuotas</h4>
+                        <p class="text-3xl font-bold text-blue-600">${stats.totalCuotas || 0}</p>
+                        <p class="text-xs text-blue-600 mt-1">Cuotas que vencen este mes</p>
+                    </div>
+                    <div class="bg-orange-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-orange-800 mb-2">Cuotas Adelantadas</h4>
+                        <p class="text-3xl font-bold text-orange-600">${stats.numAdelantadas || 0}</p>
+                        <p class="text-sm text-orange-600">${formatCurrency(stats.montoAdelantadas || 0)}</p>
+                        <p class="text-xs text-orange-600 mt-1">Pagadas este mes, vencen después</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-green-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-green-800 mb-2">Cuotas Pagadas</h4>
+                        <p class="text-3xl font-bold text-green-600">${stats.numPagadas || 0}</p>
+                        <p class="text-sm text-green-600">(${(stats.porcentajePagado || 0).toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPagadas || 0)}</p>
+                    </div>
+                    <div class="bg-red-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-red-800 mb-2">Cuotas Pendientes</h4>
+                        <p class="text-3xl font-bold text-red-600">${stats.noPagadas || 0}</p>
+                        <p class="text-sm text-red-600">(${(stats.porcentajeNoPagado || 0).toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPendientes || 0)}</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-yellow-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-yellow-800 mb-2">Monto Proyectado</h4>
+                        <p class="text-2xl font-bold text-yellow-600">${formatCurrency(stats.totalProyectado || 0)}</p>
+                        <p class="text-xs text-yellow-600 mt-1">Lo que se esperaba recibir este mes</p>
+                    </div>
+                    <div class="bg-purple-50 p-6 rounded-lg">
+                        <h4 class="text-lg font-semibold text-purple-800 mb-2">Monto Ingresado</h4>
+                        <p class="text-2xl font-bold text-purple-600">${formatCurrency(stats.montoPagado || 0)}</p>
+                        <p class="text-sm text-purple-600">(${(stats.totalProyectado || 0) > 0 ? ((stats.montoPagado || 0) / (stats.totalProyectado || 1) * 100).toFixed(1) : 0}% del proyectado)</p>
+                        <p class="text-xs text-purple-600 mt-1">Incluye cuotas del mes + adelantadas</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2">💡 Interpretación de los datos:</h4>
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <p>• <strong>Total de Cuotas:</strong> Solo cuenta cuotas N° 1 en adelante que vencen este mes (no incluye iniciales).</p>
+                        <p>• <strong>Cuotas Adelantadas:</strong> Clientes que pagaron cuotas de meses futuros durante este mes.</p>
+                        <p>• <strong>Monto Proyectado:</strong> Se calcula multiplicando cada cuota por su monto según el registro del cliente.</p>
+                        <p>• <strong>Monto Ingresado:</strong> Suma de cuotas pagadas del mes + cuotas adelantadas.</p>
+                        <p>• Si el <strong>Monto Ingresado</strong> es mayor al <strong>Proyectado</strong>, significa que hay pagos adelantados.</p>
+                    </div>
                 </div>
             </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-blue-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-blue-800 mb-2">Total de Cuotas</h4>
-                    <p class="text-3xl font-bold text-blue-600">${stats.totalCuotas}</p>
-                    <p class="text-xs text-blue-600 mt-1">Cuotas que vencen este mes</p>
-                </div>
-                <div class="bg-orange-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-orange-800 mb-2">Cuotas Adelantadas</h4>
-                    <p class="text-3xl font-bold text-orange-600">${stats.numAdelantadas}</p>
-                    <p class="text-sm text-orange-600">${formatCurrency(stats.montoAdelantadas)}</p>
-                    <p class="text-xs text-orange-600 mt-1">Pagadas este mes, vencen después</p>
-                </div>
-            </div>
-            
-
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-green-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-green-800 mb-2">Cuotas Pagadas</h4>
-                    <p class="text-3xl font-bold text-green-600">${stats.numPagadas}</p>
-                    <p class="text-sm text-green-600">(${stats.porcentajePagado.toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPagadas)}</p>
-                </div>
-                <div class="bg-red-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-red-800 mb-2">Cuotas Pendientes</h4>
-                    <p class="text-3xl font-bold text-red-600">${stats.noPagadas}</p>
-                    <p class="text-sm text-red-600">(${stats.porcentajeNoPagado.toFixed(1)}%) - ${formatCurrency(stats.montoCuotasPendientes)}</p>
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-yellow-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-yellow-800 mb-2">Monto Proyectado</h4>
-                    <p class="text-2xl font-bold text-yellow-600">${formatCurrency(stats.totalProyectado)}</p>
-                    <p class="text-xs text-yellow-600 mt-1">Lo que se esperaba recibir este mes</p>
-                </div>
-                <div class="bg-purple-50 p-6 rounded-lg">
-                    <h4 class="text-lg font-semibold text-purple-800 mb-2">Monto Ingresado</h4>
-                    <p class="text-2xl font-bold text-purple-600">${formatCurrency(stats.montoPagado)}</p>
-                    <p class="text-sm text-purple-600">(${stats.totalProyectado > 0 ? (stats.montoPagado / stats.totalProyectado * 100).toFixed(1) : 0}% del proyectado)</p>
-                    <p class="text-xs text-purple-600 mt-1">Incluye cuotas del mes + adelantadas</p>
-                </div>
-            </div>
-            
-            <div class="bg-gray-50 p-4 rounded-lg">
-                <h4 class="text-sm font-semibold text-gray-700 mb-2">💡 Interpretación de los datos:</h4>
-                <div class="text-xs text-gray-600 space-y-1">
-                    <p>• <strong>Total de Cuotas:</strong> Solo cuenta cuotas N° 1 en adelante que vencen este mes (no incluye iniciales).</p>
-                    <p>• <strong>Cuotas Adelantadas:</strong> Clientes que pagaron cuotas de meses futuros durante este mes.</p>
-                    <p>• <strong>Monto Proyectado:</strong> Se calcula multiplicando cada cuota por su monto según el registro del cliente.</p>
-                    <p>• <strong>Monto Ingresado:</strong> Suma de cuotas pagadas del mes + cuotas adelantadas.</p>
-                    <p>• Si el <strong>Monto Ingresado</strong> es mayor al <strong>Proyectado</strong>, significa que hay pagos adelantados.</p>
-                </div>
-            </div>
-        </div>
-    `;
+        `;
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+        document.getElementById('estadisticasContent').innerHTML = '<div class="text-red-500">Error al cargar estadísticas</div>';
+    }
 }
 
 // Contenido de la sección Pendientes
-function loadPendientesContent() {
-    const currentMonth = getCurrentMonth();
-    const monthName = getMonthName(currentMonth);
-    const pendientes = db.getPendientesMes(currentMonth);
-    let pendientesHTML = '';
-    if (!pendientes || pendientes.length === 0) {
-        pendientesHTML = '<div class="text-center py-8 text-green-600 font-semibold">✅ Todos los clientes han pagado su cuota este mes.</div>';
-    } else {
-        let skipped = 0;
-        pendientesHTML = '<ul class="space-y-4">';
-        pendientes.forEach(p => {
-            // Defensive: skip entries missing the linked registro to avoid runtime errors
-            if (!p || !p.registro) {
-                skipped++;
-                console.warn('[loadPendientesContent] Omitiendo pendiente sin registro asociado:', p);
-                return;
-            }
+async function loadPendientesContent() {
+    try {
+        const currentMonth = getCurrentMonth();
+        const monthName = getMonthName(currentMonth);
+        const pendientes = await db.getPendientesMes(currentMonth);
+        
+        let pendientesHTML = '';
+        if (!pendientes || pendientes.length === 0) {
+            pendientesHTML = '<div class="text-center py-8 text-green-600 font-semibold">✅ Todos los clientes han pagado su cuota este mes.</div>';
+        } else {
+            let skipped = 0;
+            pendientesHTML = '<ul class="space-y-4">';
+            pendientes.forEach(p => {
+                // Defensive: skip entries missing the linked registro to avoid runtime errors
+                if (!p || !p.registro) {
+                    skipped++;
+                    console.warn('[loadPendientesContent] Omitiendo pendiente sin registro asociado:', p);
+                    return;
+                }
 
-            const mora = calcularMora(p.monto, p.fecha_vencimiento, p.fecha_pago);
-            const montoTotal = (typeof p.monto === 'number' ? p.monto : parseFloat(p.monto) || 0) + (mora || 0);
-            const montoStr = mora > 0 ? `${formatCurrency(montoTotal)} (incluye mora)` : formatCurrency(p.monto || 0);
+                const mora = calcularMora(p.monto, p.fecha_vencimiento, p.fecha_pago);
+                const montoTotal = (typeof p.monto === 'number' ? p.monto : parseFloat(p.monto) || 0) + (mora || 0);
+                const montoStr = mora > 0 ? `${formatCurrency(montoTotal)} (incluye mora)` : formatCurrency(p.monto || 0);
 
-            pendientesHTML += `
-                <li class="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h4 class="font-semibold text-red-800">${p.registro.nombre1 || ''} ${p.registro.apellido1 || ''}</h4>
-                            <p class="text-sm text-red-600">DNI: ${p.registro.dni1 || ''} | Celular: ${p.registro.celular1 || 'N/A'}</p>
-                            <p class="text-sm text-red-600">Manzana: ${p.registro.manzana || ''} | Lote: ${p.registro.lote || ''}</p>
-                            <p class="text-sm text-red-600">Cuota N° ${p.numero} - Vence: ${formatFecha(p.fecha_vencimiento)}</p>
-                            <p class="font-semibold text-red-800">Monto a pagar: ${montoStr}</p>
+                pendientesHTML += `
+                    <li class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-semibold text-red-800">${p.registro.nombre1 || ''} ${p.registro.apellido1 || ''}</h4>
+                                <p class="text-sm text-red-600">DNI: ${p.registro.dni1 || ''} | Celular: ${p.registro.celular1 || 'N/A'}</p>
+                                <p class="text-sm text-red-600">Manzana: ${p.registro.manzana || ''} | Lote: ${p.registro.lote || ''}</p>
+                                <p class="text-sm text-red-600">Cuota N° ${p.numero} - Vence: ${formatFecha(p.fecha_vencimiento)}</p>
+                                <p class="font-semibold text-red-800">Monto a pagar: ${montoStr}</p>
+                            </div>
+                            <button onclick="showCuotasModal(${p.registro_id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                                Ver Detalle
+                            </button>
                         </div>
-                        <button onclick="showCuotasModal(${p.registro_id})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
-                            Ver Detalle
-                        </button>
+                    </li>
+                `;
+            });
+            pendientesHTML += '</ul>';
+
+            if (skipped > 0) {
+                pendientesHTML += `
+                    <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
+                        Se omitieron ${skipped} pendiente(s) por datos incompletos. Revisa la integridad de la base de datos.
                     </div>
-                </li>
-            `;
-        });
-        pendientesHTML += '</ul>';
-
-        if (skipped > 0) {
-            pendientesHTML += `
-                <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
-                    Se omitieron ${skipped} pendiente(s) por datos incompletos. Revisa la integridad de la base de datos.
-                </div>
-            `;
+                `;
+            }
         }
-    }
 
-    document.getElementById('pendientesContent').innerHTML = `
-        <div class="space-y-4">
-            <h3 class="text-xl font-semibold text-gray-800">Cuotas Pendientes de ${monthName}</h3>
-            ${pendientesHTML}
-        </div>
-    `;
+        document.getElementById('pendientesContent').innerHTML = `
+            <div class="space-y-4">
+                <h3 class="text-xl font-semibold text-gray-800">Cuotas Pendientes de ${monthName}</h3>
+                ${pendientesHTML}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error cargando pendientes:', error);
+        document.getElementById('pendientesContent').innerHTML = '<div class="text-red-500">Error al cargar pendientes</div>';
+    }
 }
 
 // Contenido de la sección Atrasados
-function loadAtrasadosContent() {
-    const atrasados = db.getAtrasados();
-    
-    let atrasadosHTML = '';
-    if (atrasados.length === 0) {
-        atrasadosHTML = '<div class="text-center py-8 text-green-600 font-semibold">✅ No hay clientes con cuotas atrasadas.</div>';
-    } else {
-        atrasadosHTML = '<ul class="space-y-4">';
-        atrasados.forEach(a => {
-            atrasadosHTML += `
-                <li class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h4 class="font-semibold text-orange-800">${a.registro.nombre1}</h4>
-                            <p class="text-sm text-orange-600">DNI: ${a.registro.dni1} | Celular: ${a.registro.celular1 || 'N/A'}</p>
-                            <p class="text-sm text-orange-600">Manzana: ${a.registro.manzana} | Lote: ${a.registro.lote}</p>
-                            <p class="font-semibold text-orange-800">Debe ${a.cuotasPendientes} cuotas atrasadas</p>
-                        </div>
-                        <button onclick="showCuotasModal(${a.registro.id})" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
-                            Ver Detalle
-                        </button>
-                    </div>
-                </li>
-            `;
-        });
-        atrasadosHTML += '</ul>';
+async function loadAtrasadosContent() {
+    try {
+        const atrasados = await db.getAtrasados();
+        
+        let atrasadosHTML = '';
+        if (!atrasados || atrasados.length === 0) {
+            atrasadosHTML = '<div class="text-center py-8 text-green-600 font-semibold">✅ No hay clientes con cuotas atrasadas.</div>';
+        } else {
+            atrasadosHTML = '<ul class="space-y-4">';
+            atrasados.forEach(a => {
+                if (a && a.registro) {
+                    atrasadosHTML += `
+                        <li class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold text-orange-800">${a.registro.nombre1 || ''}</h4>
+                                    <p class="text-sm text-orange-600">DNI: ${a.registro.dni1 || ''} | Celular: ${a.registro.celular1 || 'N/A'}</p>
+                                    <p class="text-sm text-orange-600">Manzana: ${a.registro.manzana || ''} | Lote: ${a.registro.lote || ''}</p>
+                                    <p class="font-semibold text-orange-800">Debe ${a.cuotasPendientes || 0} cuotas atrasadas</p>
+                                </div>
+                                <button onclick="showCuotasModal(${a.registro.id})" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm">
+                                    Ver Detalle
+                                </button>
+                            </div>
+                        </li>
+                    `;
+                }
+            });
+            atrasadosHTML += '</ul>';
+        }
+        
+        document.getElementById('atrasadosContent').innerHTML = `
+            <div class="space-y-4">
+                <h3 class="text-xl font-semibold text-gray-800">Clientes con Cuotas Atrasadas</h3>
+                ${atrasadosHTML}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error cargando atrasados:', error);
+        document.getElementById('atrasadosContent').innerHTML = '<div class="text-red-500">Error al cargar atrasados</div>';
     }
-    
-    document.getElementById('atrasadosContent').innerHTML = `
-        <div class="space-y-4">
-            <h3 class="text-xl font-semibold text-gray-800">Clientes con Cuotas Atrasadas</h3>
-            ${atrasadosHTML}
-        </div>
-    `;
 }
 
 // Contenido de la sección Reporte Mensual
-function loadReporteMensualContent() {
+async function loadReporteMensualContent() {
     const currentMonth = getCurrentMonth();
     
     document.getElementById('reporteMensualContent').innerHTML = `
@@ -597,93 +656,98 @@ function loadReporteMensualContent() {
         </div>
     `;
     
-    updateReporteMensual();
+    await updateReporteMensual();
 }
 
-function updateReporteMensual() {
-    const selectedMonth = document.getElementById('reporteMonth').value;
-    const reporte = db.getReporteMensual(selectedMonth);
-    const monthName = getMonthName(selectedMonth);
-    
-    let registrosHTML = '';
-    if (reporte.registros.length === 0) {
-        registrosHTML = '<tr><td colspan="8" class="text-center py-4 text-gray-500">No hay registros en este mes.</td></tr>';
-    } else {
-        reporte.registros.forEach(r => {
-            const inicialStr = r.forma_pago === 'cuotas' ? formatCurrency(r.inicial || 0) : '-';
-            registrosHTML += `
-                <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm">${formatFecha(r.fecha_registro)}</td>
-                    <td class="px-4 py-3 text-sm">${r.nombre1}</td>
-                    <td class="px-4 py-3 text-sm">${r.dni1}</td>
-                    <td class="px-4 py-3 text-sm">${r.manzana}</td>
-                    <td class="px-4 py-3 text-sm">${r.lote}</td>
-                    <td class="px-4 py-3 text-sm">${r.forma_pago.charAt(0).toUpperCase() + r.forma_pago.slice(1)}</td>
-                    <td class="px-4 py-3 text-sm">${formatCurrency(r.monto_total)}</td>
-                    <td class="px-4 py-3 text-sm">${inicialStr}</td>
-                </tr>
-            `;
-        });
+async function updateReporteMensual() {
+    try {
+        const selectedMonth = document.getElementById('reporteMonth').value;
+        const reporte = await db.getReporteMensual(selectedMonth);
+        const monthName = getMonthName(selectedMonth);
+        
+        let registrosHTML = '';
+        if (!reporte.registros || reporte.registros.length === 0) {
+            registrosHTML = '<tr><td colspan="8" class="text-center py-4 text-gray-500">No hay registros en este mes.</td></tr>';
+        } else {
+            reporte.registros.forEach(r => {
+                const inicialStr = r.forma_pago === 'cuotas' ? formatCurrency(r.inicial || 0) : '-';
+                registrosHTML += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm">${formatFecha(r.fecha_registro)}</td>
+                        <td class="px-4 py-3 text-sm">${r.nombre1 || ''}</td>
+                        <td class="px-4 py-3 text-sm">${r.dni1 || ''}</td>
+                        <td class="px-4 py-3 text-sm">${r.manzana || ''}</td>
+                        <td class="px-4 py-3 text-sm">${r.lote || ''}</td>
+                        <td class="px-4 py-3 text-sm">${r.forma_pago ? r.forma_pago.charAt(0).toUpperCase() + r.forma_pago.slice(1) : ''}</td>
+                        <td class="px-4 py-3 text-sm">${formatCurrency(r.monto_total || 0)}</td>
+                        <td class="px-4 py-3 text-sm">${inicialStr}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        document.getElementById('reporteContent').innerHTML = `
+            <div class="space-y-6">
+                <h3 class="text-xl font-semibold text-gray-800">Resumen de ${monthName}</h3>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-blue-800">Total Clientes</h4>
+                        <p class="text-2xl font-bold text-blue-600">${reporte.totalClientes || 0}</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-green-800">Con Cuotas</h4>
+                        <p class="text-2xl font-bold text-green-600">${reporte.totalCuotas || 0}</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-purple-800">Al Contado</h4>
+                        <p class="text-2xl font-bold text-purple-600">${reporte.totalContado || 0}</p>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-yellow-800">Total Ingresos</h4>
+                        <p class="text-xl font-bold text-yellow-600">${formatCurrency(reporte.totalGeneral || 0)}</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-teal-50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-teal-800">Ingresos por Iniciales</h4>
+                        <p class="text-xl font-bold text-teal-600">${formatCurrency(reporte.inicialesCuotas || 0)}</p>
+                    </div>
+                    <div class="bg-indigo-50 p-4 rounded-lg">
+                        <h4 class="text-sm font-semibold text-indigo-800">Ingresos por Contado</h4>
+                        <p class="text-xl font-bold text-indigo-600">${formatCurrency(reporte.totalContadoMonto || 0)}</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Detalle de Registros</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white border border-gray-200 rounded-lg">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DNI</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manzana</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lote</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forma Pago</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto Total</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inicial</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                ${registrosHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error actualizando reporte mensual:', error);
+        document.getElementById('reporteContent').innerHTML = '<div class="text-red-500">Error al cargar reporte</div>';
     }
-    
-    document.getElementById('reporteContent').innerHTML = `
-        <div class="space-y-6">
-            <h3 class="text-xl font-semibold text-gray-800">Resumen de ${monthName}</h3>
-            
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-blue-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-semibold text-blue-800">Total Clientes</h4>
-                    <p class="text-2xl font-bold text-blue-600">${reporte.totalClientes}</p>
-                </div>
-                <div class="bg-green-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-semibold text-green-800">Con Cuotas</h4>
-                    <p class="text-2xl font-bold text-green-600">${reporte.totalCuotas}</p>
-                </div>
-                <div class="bg-purple-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-semibold text-purple-800">Al Contado</h4>
-                    <p class="text-2xl font-bold text-purple-600">${reporte.totalContado}</p>
-                </div>
-                <div class="bg-yellow-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-semibold text-yellow-800">Total Ingresos</h4>
-                    <p class="text-xl font-bold text-yellow-600">${formatCurrency(reporte.totalGeneral)}</p>
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-teal-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-semibold text-teal-800">Ingresos por Iniciales</h4>
-                    <p class="text-xl font-bold text-teal-600">${formatCurrency(reporte.inicialesCuotas)}</p>
-                </div>
-                <div class="bg-indigo-50 p-4 rounded-lg">
-                    <h4 class="text-sm font-semibold text-indigo-800">Ingresos por Contado</h4>
-                    <p class="text-xl font-bold text-indigo-600">${formatCurrency(reporte.totalContadoMonto)}</p>
-                </div>
-            </div>
-            
-            <div>
-                <h3 class="text-lg font-semibold text-gray-800 mb-4">Detalle de Registros</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">DNI</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manzana</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lote</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forma Pago</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto Total</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Inicial</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            ${registrosHTML}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
 }
 
 // Contenido de la sección Crear Usuario
@@ -733,7 +797,7 @@ function loadCrearUsuarioContent() {
 }
 
 // Manejo de nuevo registro
-function handleNewRegistro(event) {
+async function handleNewRegistro(event) {
     event.preventDefault();
     
     const formData = new FormData(event.target);
@@ -756,7 +820,7 @@ function handleNewRegistro(event) {
     };
     
     // Validar que no exista la manzana y lote
-    const registros = db.getRegistros();
+    const registros = await db.getRegistros();
     const existe = registros.find(r => 
         r.manzana.toUpperCase() === registroData.manzana.toUpperCase() && 
         r.lote.toUpperCase() === registroData.lote.toUpperCase()
@@ -774,7 +838,7 @@ function handleNewRegistro(event) {
     
     try {
         // Crear registro
-        const nuevoRegistro = db.addRegistro(registroData);
+        const nuevoRegistro = await db.addRegistro(registroData);
         
         // Generar cuotas
         generarCuotas(
@@ -798,7 +862,7 @@ function handleNewRegistro(event) {
 }
 
 // Manejo de crear usuario
-function handleCrearUsuario(event) {
+async function handleCrearUsuario(event) {
     event.preventDefault();
     
     const formData = new FormData(event.target);
@@ -829,7 +893,7 @@ function handleCrearUsuario(event) {
 }
 
 // Eliminar registro
-function deleteRegistro(registroId) {
+async function deleteRegistro(registroId) {
     const _auth = getAuth();
     if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
         showNotification('No tienes permisos para eliminar registros', 'error');
@@ -837,7 +901,7 @@ function deleteRegistro(registroId) {
     }
     
     try {
-        db.deleteRegistro(registroId);
+        await db.deleteRegistro(registroId);
         showNotification('Registro eliminado exitosamente', 'success');
         loadSectionContent(currentSection);
     } catch (error) {
@@ -847,14 +911,14 @@ function deleteRegistro(registroId) {
 }
 
 // ACTUALIZADO: Modal para pagar cuota - Acepta cualquier tipo de archivo
-function showPagarCuotaModal(cuotaId) {
+async function showPagarCuotaModal(cuotaId) {
     const _auth = getAuth();
     if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
         showNotification('No tienes permisos para registrar pagos', 'error');
         return;
     }
     
-    const cuota = db.getCuotaById(cuotaId);
+    const cuota = await db.getCuotaById(cuotaId);
     if (!cuota || cuota.pagado) {
         showNotification('No se puede registrar el pago para esta cuota', 'error');
         return;
@@ -981,13 +1045,13 @@ async function handlePagarCuota(event, cuotaId) {
         }
         
         // Actualizar cuota como pagada
-        db.updateCuota(cuotaId, {
+        await db.updateCuota(cuotaId, {
             pagado: 1,
             fecha_pago: fechaPago
         });
         
         // Intentar actualizar la UI del modal de cuotas sin forzar un cierre que cause un parpadeo
-        const cuota = db.getCuotaById(cuotaId);
+        const cuota = await db.getCuotaById(cuotaId);
         if (cuota) {
             showNotification('Pago registrado exitosamente', 'success');
             // Actualizar la fila del cliente inmediatamente (si está visible)
@@ -1014,21 +1078,21 @@ async function handlePagarCuota(event, cuotaId) {
 }
 
 // Modal para editar pago
-function showEditarPagoModal(cuotaId) {
+async function showEditarPagoModal(cuotaId) {
     const _auth = getAuth();
     if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
         showNotification('No tienes permisos para editar pagos', 'error');
         return;
     }
     
-    const cuota = db.getCuotaById(cuotaId);
+    const cuota = await db.getCuotaById(cuotaId);
     if (!cuota) {
         showNotification('Cuota no encontrada', 'error');
         return;
     }
     
-    const vouchers = db.getVouchersByCuotaId(cuotaId);
-    const boletas = db.getBoletasByCuotaId(cuotaId);
+    const vouchers = await db.getVouchersByCuotaId(cuotaId);
+    const boletas = await db.getBoletasByCuotaId(cuotaId);
     const cuotaDisplay = cuota.numero === 0 ? 'Inicial' : `N° ${cuota.numero}`;
     
     let vouchersHTML = '';
@@ -1159,7 +1223,7 @@ async function handleEditarPago(event, cuotaId) {
     try {
         // Actualizar fecha si se proporcionó
         if (fechaPago) {
-            db.updateCuota(cuotaId, { fecha_pago: fechaPago });
+            await db.updateCuota(cuotaId, { fecha_pago: fechaPago });
         }
         
         // Procesar nuevos vouchers y boletas con retries y no bloquear por uno fallido
@@ -1199,7 +1263,7 @@ async function handleEditarPago(event, cuotaId) {
         }
         
         // Intentar reabrir/actualizar el modal de cuotas después de editar
-        const cuota = db.getCuotaById(cuotaId);
+        const cuota = await db.getCuotaById(cuotaId);
         if (cuota) {
             showNotification('Pago actualizado exitosamente', 'success');
             try { if (typeof window.updateRegistroRow === 'function') window.updateRegistroRow(cuota.registro_id); } catch(e){}
@@ -1222,14 +1286,14 @@ async function handleEditarPago(event, cuotaId) {
 }
 
 // Modal para editar la mora manualmente
-function editMoraModal(cuotaId) {
+async function editMoraModal(cuotaId) {
     const _auth = getAuth();
     if (!(_auth && _auth.isAdmin && _auth.isAdmin())) {
         showNotification('No tienes permisos para editar la mora', 'error');
         return;
     }
 
-    const cuota = db.getCuotaById(cuotaId);
+    const cuota = await db.getCuotaById(cuotaId);
     if (!cuota) return showNotification('Cuota no encontrada', 'error');
 
     const currentMoraManual = cuota.mora_manual ? cuota.mora_manual : '';
@@ -1284,13 +1348,13 @@ async function handleEditMora(event, cuotaId) {
     try {
         if (moraVal === 0) {
             // remover mora_manual
-            db.updateCuota(cuotaId, { mora_manual: 0 });
+            await db.updateCuota(cuotaId, { mora_manual: 0 });
         } else {
-            db.updateCuota(cuotaId, { mora_manual: moraVal });
+            await db.updateCuota(cuotaId, { mora_manual: moraVal });
         }
 
         showNotification('Mora actualizada', 'success');
-        const cuota = db.getCuotaById(cuotaId);
+        const cuota = await db.getCuotaById(cuotaId);
         if (cuota && typeof showCuotasModal === 'function') {
             showCuotasModal(cuota.registro_id);
         } else {
@@ -1304,18 +1368,18 @@ async function handleEditMora(event, cuotaId) {
 }
 
 // Eliminar voucher
-function deleteVoucher(voucherId, cuotaId) {
-    confirmAction('¿Seguro que deseas eliminar este voucher?', () => {
-        db.deleteVoucher(voucherId);
+async function deleteVoucher(voucherId, cuotaId) {
+    confirmAction('¿Seguro que deseas eliminar este voucher?', async () => {
+        await db.deleteVoucher(voucherId);
         showNotification('Voucher eliminado exitosamente', 'success');
         showEditarPagoModal(cuotaId);
     });
 }
 
 // Eliminar boleta
-function deleteBoleta(boletaId, cuotaId) {
-    confirmAction('¿Seguro que deseas eliminar esta boleta?', () => {
-        db.deleteBoleta(boletaId);
+async function deleteBoleta(boletaId, cuotaId) {
+    confirmAction('¿Seguro que deseas eliminar esta boleta?', async () => {
+        await db.deleteBoleta(boletaId);
         showNotification('Boleta eliminada exitosamente', 'success');
         showEditarPagoModal(cuotaId);
     });
@@ -1348,5 +1412,7 @@ if (typeof showProjectionRange === 'function') window.showProjectionRange = show
 // Exponer funciones que se llaman desde HTML inline en componentes.js
 if (typeof editMoraModal === 'function') window.editMoraModal = editMoraModal;
 if (typeof handleEditMora === 'function') window.handleEditMora = handleEditMora;
+// Exponer updateReporteMensual para el onchange del input
+if (typeof updateReporteMensual === 'function') window.updateReporteMensual = updateReporteMensual;
 // Asegurar currentSection inicial también esté en window
 try { window.currentSection = currentSection; } catch (e) { /* ignore */ }
