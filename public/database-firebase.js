@@ -799,13 +799,15 @@ class Database {
 
 // Instancia global de la base de datos
 const database = new Database();
+
+// Crear alias 'db' para compatibilidad con app.js
+window.db = database;
 window.database = database;
 
 // Exponer utilidades globales
 if (typeof window.cleanupOrphans === 'undefined') {
-    window.cleanupOrphans = function(opts) { return db.cleanupOrphans(opts); };
+    window.cleanupOrphans = function(opts) { return database.cleanupOrphans(opts); };
 }
 if (typeof window.recalcRegistroEstado === 'undefined') {
-    window.recalcRegistroEstado = function(registroId) { return db.recalcRegistroEstado(registroId); };
-
+    window.recalcRegistroEstado = function(registroId) { return database.recalcRegistroEstado(registroId); };
 }
