@@ -12,14 +12,15 @@ console.log('🔥 Cargando Firebase SDK...');
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-        // Configuración de Firebase CORREGIDA
+        // ⚙️ Configuración Firebase CORREGIDA - Opción A
         const firebaseConfig = {
             apiKey: "AIzaSyAp6lYxU-ZTz8GL4fwAQWbkcCNODQuils8",
-            authDomain: "villa-hermosa-00.firebaseapp.com",
-            projectId: "villa-hermosa-00",
-            storageBucket: "villa-hermosa-00.appspot.com",
+            authDomain: "villa-hermosa-carhuaz-6aa64.firebaseapp.com",
+            projectId: "villa-hermosa-carhuaz-6aa64",
+            storageBucket: "villa-hermosa-carhuaz-6aa64.appspot.com",
             messagingSenderId: "82074482369",
-            appId: "1:82074482369:web:66a1a2cb610b4c21440640"
+            appId: "1:82074482369:web:66a1a2cb610b4c21440640",
+            measurementId: "G-N8JEN5X0WC"
         };
 
         // Inicializar Firebase
@@ -63,6 +64,7 @@ console.log('🔥 Cargando Firebase SDK...');
         };
 
         console.log('✅ Firebase inicializado correctamente y disponible globalmente');
+        console.log('📊 Proyecto unificado:', firebaseConfig.projectId);
         
         // Disparar evento personalizado para indicar que Firebase está listo
         window.dispatchEvent(new CustomEvent('firebaseReady'));
