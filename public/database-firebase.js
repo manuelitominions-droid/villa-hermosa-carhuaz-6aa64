@@ -1,4 +1,4 @@
-// database-firebase.js — versión completa con métodos faltantes
+// database-firebase.js — versión completa con métodos faltantes y ID numérico
 
 import { db, storage } from '../firebase-config.js';
 import {
@@ -20,28 +20,85 @@ class DatabaseManager {
   constructor() {
     this.db = db;
     this.storage = storage;
+    this._registrosCache = null;
+    this._cuotasCache = null;
+  }
+
+  // ----------- SISTEMA DE ID NUMÉRICO -----------
+  async getNextNumericId() {
+    try {
+      const registros = await this.getRegistros();
+      if (registros.length === 0) return 1;
+      
+      // Buscar el ID numérico más alto
+      const maxId = registros.reduce((max, r) => {
+        const numId = r.numeric_id || 0;
+        return numId > max ? numId : max;
+      }, 0);
+      
+      return maxId + 1;
+    } catch (error) {
+      console.error('❌ Error obteniendo siguiente ID:', error);
+      return 1;
+    }
   }
 
   // ----------- REGISTROS -----------
   async getRegistros() {
     try {
+      if (this._registrosCache) return this._registrosCache;
+      
       const registrosRef = collection(this.db, 'registros');
       const snapshot = await getDocs(registrosRef);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const registros = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        firebase_id: doc.id,
+        ...doc.data() 
+      }));
+      
+      // Ordenar por numeric_id si existe, sino por fecha_registro
+      registros.sort((a, b) => {
+        if (a.numeric_id && b.numeric_id) {
+          return b.numeric_id - a.numeric_id; // Descendente
+        }
+        return new Date(b.fecha_registro || 0) - new Date(a.fecha_registro || 0);
+      });
+      
+      this._registrosCache = registros;
+      return registros;
     } catch (error) {
       console.error('❌ Error obteniendo registros:', error);
       return [];
     }
   }
 
+  getRegistroById(registroId) {
+    if (!this._registrosCache) return null;
+    return this._registrosCache.find(r => r.id === registroId || r.firebase_id === registroId);
+  }
+
   async addRegistro(data) {
     try {
-      const registrosRef = collection(this.db, 'registros');
-      const docRef = await addDoc(registrosRef, {
+      const numericId = await this.getNextNumericId();
+      const registroData = {
         ...data,
+        numeric_id: numericId,
         fecha_registro: new Date().toISOString().split('T')[0],
-      });
-      return { id: docRef.id, ...data };
+      };
+      
+      const registrosRef = collection(this.db, 'registros');
+      const docRef = await addDoc(registrosRef, registroData);
+      
+      const nuevoRegistro = { 
+        id: docRef.id, 
+        firebase_id: docRef.id,
+        ...registroData 
+      };
+      
+      // Actualizar cache
+      this._registrosCache = null;
+      
+      return nuevoRegistro;
     } catch (error) {
       console.error('❌ Error agregando registro:', error);
       throw error;
@@ -52,6 +109,11 @@ class DatabaseManager {
     try {
       const ref = doc(this.db, 'registros', id);
       await updateDoc(ref, updateData);
+      
+      // Limpiar cache
+      this._registrosCache = null;
+      this._cuotasCache = null;
+      
       return true;
     } catch (error) {
       console.error('❌ Error actualizando registro:', error);
@@ -72,6 +134,11 @@ class DatabaseManager {
       );
 
       await Promise.all(deletePromises);
+      
+      // Limpiar cache
+      this._registrosCache = null;
+      this._cuotasCache = null;
+      
       console.log(`🗑️ Registro y sus cuotas eliminadas: ${id}`);
       return true;
     } catch (error) {
@@ -111,9 +178,14 @@ class DatabaseManager {
   // ----------- CUOTAS -----------
   async getCuotas() {
     try {
+      if (this._cuotasCache) return this._cuotasCache;
+      
       const cuotasRef = collection(this.db, 'cuotas');
       const snapshot = await getDocs(cuotasRef);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const cuotas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      this._cuotasCache = cuotas;
+      return cuotas;
     } catch (error) {
       console.error('❌ Error obteniendo cuotas:', error);
       return [];
@@ -135,6 +207,10 @@ class DatabaseManager {
     try {
       const cuotasRef = collection(this.db, 'cuotas');
       const docRef = await addDoc(cuotasRef, data);
+      
+      // Limpiar cache
+      this._cuotasCache = null;
+      
       return { id: docRef.id, ...data };
     } catch (error) {
       console.error('❌ Error agregando cuota:', error);
@@ -146,6 +222,10 @@ class DatabaseManager {
     try {
       const ref = doc(this.db, 'cuotas', id);
       await updateDoc(ref, updateData);
+      
+      // Limpiar cache
+      this._cuotasCache = null;
+      
       return true;
     } catch (error) {
       console.error('❌ Error actualizando cuota:', error);
@@ -155,17 +235,31 @@ class DatabaseManager {
 
   async getCuotasByRegistroId(registroId) {
     try {
-      const cuotasRef = collection(this.db, 'cuotas');
-      const cuotasQuery = query(
-        cuotasRef,
-        where('registro_id', '==', registroId),
-        orderBy('numero')
-      );
-      const snapshot = await getDocs(cuotasQuery);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const cuotas = await this.getCuotas();
+      return cuotas
+        .filter(c => c.registro_id === registroId)
+        .sort((a, b) => (a.numero || 0) - (b.numero || 0));
     } catch (error) {
       console.error('❌ Error obteniendo cuotas por registro:', error);
       return [];
+    }
+  }
+
+  // ----------- ESTADO DE PAGOS -----------
+  getSaldoPendienteByRegistro(registroId) {
+    try {
+      if (!this._cuotasCache) return { pendingCount: 0, pendingAmount: 0 };
+      
+      const cuotas = this._cuotasCache.filter(c => c.registro_id === registroId && c.numero > 0);
+      const cuotasPendientes = cuotas.filter(c => !c.pagado || c.pagado !== 1);
+      
+      const pendingCount = cuotasPendientes.length;
+      const pendingAmount = cuotasPendientes.reduce((sum, c) => sum + (c.monto || 0), 0);
+      
+      return { pendingCount, pendingAmount };
+    } catch (error) {
+      console.error('❌ Error calculando saldo pendiente:', error);
+      return { pendingCount: 0, pendingAmount: 0 };
     }
   }
 
@@ -174,27 +268,57 @@ class DatabaseManager {
     try {
       const cuotas = await this.getCuotas();
       const registros = await this.getRegistros();
-      const proyeccion = cuotas
-        .filter(c => c.fecha_vencimiento?.substring(0, 7) === month)
-        .map(c => {
-          const registro = registros.find(r => r.id === c.registro_id);
-          return { ...c, registro };
-        })
-        .filter(p => p.registro);
-      return proyeccion;
+      
+      const cuotasMes = cuotas.filter(c => 
+        c.fecha_vencimiento?.substring(0, 7) === month && c.numero > 0
+      );
+      
+      const totalProjected = cuotasMes.reduce((sum, c) => sum + (c.monto || 0), 0);
+      const count = cuotasMes.length;
+      
+      return { totalProjected, count, cuotas: cuotasMes };
     } catch (error) {
       console.error('❌ Error obteniendo proyección para el mes:', error);
+      return { totalProjected: 0, count: 0, cuotas: [] };
+    }
+  }
+
+  async getProjectionTimeline(startMonth, endMonth) {
+    try {
+      const cuotas = await this.getCuotas();
+      const timeline = {};
+      
+      cuotas
+        .filter(c => c.fecha_vencimiento && c.numero > 0)
+        .forEach(c => {
+          const month = c.fecha_vencimiento.substring(0, 7);
+          if (month >= startMonth && month <= endMonth) {
+            if (!timeline[month]) {
+              timeline[month] = { month, count: 0, totalProjected: 0 };
+            }
+            timeline[month].count++;
+            timeline[month].totalProjected += c.monto || 0;
+          }
+        });
+      
+      return Object.values(timeline).sort((a, b) => a.month.localeCompare(b.month));
+    } catch (error) {
+      console.error('❌ Error obteniendo timeline de proyección:', error);
       return [];
     }
   }
 
-  async getProjectionByRegistroId(registroId) {
+  async getLastCuotaMonth() {
     try {
-      const cuotas = await this.getCuotasByRegistroId(registroId);
-      return cuotas;
+      const cuotas = await this.getCuotas();
+      const fechas = cuotas
+        .filter(c => c.fecha_vencimiento && c.numero > 0)
+        .map(c => c.fecha_vencimiento.substring(0, 7))
+        .sort();
+      return fechas.length ? fechas[fechas.length - 1] : null;
     } catch (error) {
-      console.error('❌ Error obteniendo proyección por registro:', error);
-      return [];
+      console.error('❌ Error obteniendo última cuota:', error);
+      return null;
     }
   }
 
@@ -295,20 +419,6 @@ class DatabaseManager {
     }
   }
 
-  async getLastCuotaMonth() {
-    try {
-      const cuotas = await this.getCuotas();
-      const fechas = cuotas
-        .filter(c => c.fecha_vencimiento && c.numero > 0)
-        .map(c => c.fecha_vencimiento.substring(0, 7))
-        .sort();
-      return fechas.length ? fechas[fechas.length - 1] : null;
-    } catch (error) {
-      console.error('❌ Error obteniendo última cuota:', error);
-      return null;
-    }
-  }
-
   // ----------- VOUCHERS Y BOLETAS -----------
   async getVouchersByCuotaId(cuotaId) {
     try {
@@ -375,11 +485,25 @@ class DatabaseManager {
       throw error;
     }
   }
+
+  // ----------- MÉTODOS DE CACHE -----------
+  clearCache() {
+    this._registrosCache = null;
+    this._cuotasCache = null;
+  }
+
+  async refreshCache() {
+    this.clearCache();
+    await this.getRegistros();
+    await this.getCuotas();
+  }
 }
 
 // Crear instancia global
 window.database = new DatabaseManager();
-console.log('✅ DatabaseManager inicializado correctamente con Firestore modular');
+window.db = window.database; // Alias para compatibilidad
+
+console.log('✅ DatabaseManager inicializado correctamente con Firestore modular y ID numérico');
 
 // Exportar para usar en otros módulos
 export default window.database;
