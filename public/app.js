@@ -947,7 +947,7 @@ function loadCrearUsuarioContent() {
     `;
 }
 
-// Manejo de nuevo registro
+// CORREGIDO: Manejo de nuevo registro con generación automática de cuotas
 async function handleNewRegistro(event) {
     event.preventDefault();
     
@@ -971,6 +971,8 @@ async function handleNewRegistro(event) {
     };
     
     try {
+        console.log('📝 Creando nuevo registro:', registroData);
+        
         // Esperar a que la base de datos esté disponible
         const db = await waitForDatabase();
         
@@ -989,20 +991,27 @@ async function handleNewRegistro(event) {
         // Ajustar datos según forma de pago
         if (registroData.forma_pago === 'contado') {
             registroData.inicial = 0;
+            registroData.numero_cuotas = 1;
         }
         
         // Crear registro
+        console.log('💾 Guardando registro en Firebase...');
         const nuevoRegistro = await db.addRegistro(registroData);
+        console.log('✅ Registro creado:', nuevoRegistro);
         
-        // Generar cuotas
-        if (typeof generarCuotas === 'function') {
-            generarCuotas(
+        // CORREGIDO: Generar cuotas automáticamente usando la función correcta
+        console.log('🔢 Generando cuotas automáticamente...');
+        if (typeof generarCuotasAutomaticamente === 'function') {
+            await generarCuotasAutomaticamente(
                 nuevoRegistro.id,
                 registroData.forma_pago,
                 registroData.monto_total,
                 registroData.inicial,
                 registroData.numero_cuotas
             );
+            console.log('✅ Cuotas generadas exitosamente');
+        } else {
+            console.warn('⚠️ Función generarCuotasAutomaticamente no disponible');
         }
         
         showNotification('Registro creado exitosamente', 'success');
@@ -1012,8 +1021,8 @@ async function handleNewRegistro(event) {
         loadSectionContent(currentSection);
         
     } catch (error) {
+        console.error('❌ Error al crear el registro:', error);
         showNotification('Error al crear el registro', 'error');
-        console.error(error);
     }
 }
 
